@@ -1,0 +1,173 @@
+[
+    {
+        "depot": "DAUSA",
+        "date": "2026-06-05",
+        "vehicle": "RJ14PH0430",
+        "indent_no": "001",
+        "technician": "Abc",
+        "items": [
+            {
+                "lf_no": "PGK/03",
+                "part_no": "252599000103",
+                "item_name": "MAJOR GASKIT SET 697",
+                "source": "Central Store",
+                "qty": "10",
+                "rate": "20",
+                "total": "200"
+            },
+            {
+                "lf_no": "PGK/07",
+                "part_no": "252020125301",
+                "item_name": "COOLING PIPE GASKIT",
+                "source": "Central Store",
+                "qty": "02",
+                "rate": "5",
+                "total": "10"
+            }
+        ]
+    },
+    {
+        "depot": "TONK",
+        "date": "2026-06-05",
+        "vehicle": "RJ14PH0435",
+        "indent_no": "01",
+        "technician": "abc",
+        "items": [
+            {
+                "lf_no": "GAB/01",
+                "part_no": "4BA0169",
+                "item_name": "DRY BATTERY 12V 19P",
+                "source": "Central Store",
+                "qty": "10",
+                "rate": "20",
+                "total": "200"
+            }
+        ]
+    },
+    {
+        "depot": "TONK",
+        "date": "2026-06-05",
+        "vehicle": "RJ20PB1520",
+        "indent_no": "001",
+        "technician": "abc",
+        "items": [
+            {
+                "lf_no": "PGK/10",
+                "part_no": "3214610880",
+                "item_name": "STRG.GASKIT",
+                "source": "Central Store",
+                "qty": "10",
+                "rate": "100",
+                "total": "1000"
+            }
+        ]
+    },
+    {
+        "depot": "DAUSA",
+        "date": "2026-06-05",
+        "vehicle": "RJ14PH0435",
+        "indent_no": "002",
+        "technician": "xyz",
+        "items": [
+            {
+                "lf_no": "PGK/12",
+                "part_no": "257635605301",
+                "item_name": "GASKIT HUB",
+                "source": "Central Store",
+                "qty": "12",
+                "rate": "20",
+                "total": "240"
+            },
+            {
+                "lf_no": "GAB/05",
+                "part_no": "12V-15P N-70Z",
+                "item_name": "DRY BATTERY 75AH (JEEP)",
+                "source": "Central Store",
+                "qty": "02",
+                "rate": "1000",
+                "total": "2000"
+            }
+        ]
+    },
+    {
+        "depot": "TONK",
+        "date": "2026-06-04",
+        "vehicle": "RJ20PB1517",
+        "indent_no": "002",
+        "technician": "xyz",
+        "items": [
+            {
+                "lf_no": "GAB/07",
+                "part_no": "NPN",
+                "item_name": "FEFO-ATS-DIN44BATTERY",
+                "source": "Central Store",
+                "qty": "10",
+                "rate": "20",
+                "total": "200"
+            }
+        ]
+    },
+    {
+        "depot": "KOTA",
+        "date": "2026-06-05",
+        "vehicle": "RJ20PB1527",
+        "indent_no": "10",
+        "technician": "vqbvws",
+        "items": [
+            {
+                "lf_no": "EI/PB/03",
+                "part_no": "MBO25177",
+                "item_name": "Frt. SPRING shackle pin",
+                "source": "Central Store",
+                "qty": "02",
+                "rate": "120",
+                "total": "240"
+            },
+            {
+                "lf_no": "GAB/03",
+                "part_no": "12 V26 AH BATTERY",
+                "item_name": "BATTERY 12 VOLTS 26 AH",
+                "source": "Central Store",
+                "qty": "01",
+                "rate": "10000",
+                "total": "10000"
+            }
+        ]
+    },
+    {
+        "depot": "DAUSA",
+        "date": "2026-06-05",
+        "vehicle": "RJ14PH0429",
+        "indent_no": "00122",
+        "technician": "fgdhgn",
+        "items": [
+            {
+                "lf_no": "GAB/07",
+                "part_no": "NPN",
+                "item_name": "FEFO-ATS-DIN44BATTERY",
+                "source": "Central Store",
+                "qty": "20",
+                "rate": "10",
+                "total": "200"
+            }
+        ]
+    },
+    {
+        "depot": "DAUSA",
+        "date": "2026-06-04",
+        "vehicle": "RJ14PH0438",
+        "indent_no": "654",
+        "technician": "ghvhjbn",
+        "items": [
+            {
+                "lf_no": "GAB/04",
+                "part_no": "12V-9P 6*N9R",
+                "item_name": "DRY BATTERY 60 AH (AMBASSADOR)",
+                "source": "Central Store",
+                "qty": "10",
+                "rate": "20",
+                "total": "200"
+            }
+        ]
+    }
+]
