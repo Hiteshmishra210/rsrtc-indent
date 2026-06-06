@@ -1,12 +1,68 @@
-
 import pandas as pd
+
 
 vehicle_df = pd.read_excel("VEHAPR26.xlsx")
 item_df = pd.read_excel("Itom list.xlsx")
 from flask import Flask,request,redirect,session
+import os
+import psycopg2
 
 app = Flask(__name__)
 app.secret_key = "rsrtc2026"
+
+DATABASE_URL = os.environ.get("DATABASE_URL")
+conn = psycopg2.connect(DATABASE_URL)
+
+cur = conn.cursor()
+
+cur.execute("""
+CREATE TABLE IF NOT EXISTS indents (
+    id SERIAL PRIMARY KEY,
+    depot TEXT,
+    date TEXT,
+    vehicle TEXT,
+    indent_no TEXT,
+    technician TEXT
+);
+""")
+
+cur.execute("""
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'depot_indent_unique'
+    ) THEN
+        ALTER TABLE indents
+        ADD CONSTRAINT depot_indent_unique
+        UNIQUE (depot, indent_no);
+    END IF;
+END $$;
+""")
+
+cur.execute("""
+CREATE TABLE IF NOT EXISTS indent_items (
+    id SERIAL PRIMARY KEY,
+    indent_id INTEGER,
+    lf_no TEXT,
+    part_no TEXT,
+    item_name TEXT,
+    source TEXT,
+    qty TEXT,
+    rate TEXT,
+    total TEXT
+);
+""")
+
+conn.commit()
+
+cur.close()
+conn.close()
+
+def get_conn():
+    return psycopg2.connect(DATABASE_URL)
+
 
 DEPOTS = [
 "ABU ROAD","AJAYMERU","AJMER","ALWAR","ANOOPGARH","BANSWARA","BARAN",
@@ -558,7 +614,7 @@ type="text"
 name="technician"
 autocomplete="off"
 placeholder="Technician Name"
-pattern="[A-Za-z]+"
+pattern="[A-Za-z ]+"
 required>
 
 <h3>Item Details</h3>
@@ -1302,25 +1358,76 @@ def save_indent():
     if len(record["items"]) == 0:
         return "Please Add At Least One Item"
 
-    try:
-        with open("data.json", "r") as f:
-            data = json.load(f)
-    except:
-        data = []
+    conn = get_conn()
+    cur = conn.cursor()
 
-    for r in data:
+    cur.execute(
+        """
+        SELECT id
+        FROM indents
+        WHERE depot=%s AND indent_no=%s
+        """,
+        (depot, indent_no)
+    )
 
-        if (
-            r.get("depot") == depot
-            and
-            r.get("indent_no") == indent_no
-        ):
-            return "Indent Number Already Exists"
+    if cur.fetchone():
 
-    data.append(record)
+        cur.close()
+        conn.close()
 
-    with open("data.json", "w") as f:
-        json.dump(data, f, indent=4)
+        return "Indent Number Already Exists"
+
+    cur.execute(
+        """
+        INSERT INTO indents
+        (depot,date,vehicle,indent_no,technician)
+        VALUES (%s,%s,%s,%s,%s)
+        RETURNING id
+        """,
+        (
+            depot,
+            date,
+            vehicle,
+            indent_no,
+            technician
+        )
+    )
+
+    indent_id = cur.fetchone()[0]
+
+    for item in record["items"]:
+
+        cur.execute(
+            """
+            INSERT INTO indent_items
+            (
+                indent_id,
+                lf_no,
+                part_no,
+                item_name,
+                source,
+                qty,
+                rate,
+                total
+            )
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+            """,
+            (
+                indent_id,
+                item["lf_no"],
+                item["part_no"],
+                item["item_name"],
+                item["source"],
+                item["qty"],
+                item["rate"],
+                item["total"]
+            )
+        )
+
+    conn.commit()
+
+    cur.close()
+    conn.close()
 
     return f"""
     <!DOCTYPE html>
@@ -1358,11 +1465,30 @@ def save_indent():
 @app.route("/Report/<depot>")
 def report(depot):
 
-    try:
-        with open("data.json","r") as f:
-            data = json.load(f)
-    except:
-        data = []
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+    SELECT
+        i.date,
+        i.indent_no,
+        i.vehicle,
+        d.lf_no,
+        d.part_no,
+        d.item_name,
+        d.qty,
+        d.rate,
+        d.total
+    FROM indents i
+    JOIN indent_items d
+    ON i.id = d.indent_id
+    WHERE i.depot = %s
+    """, (depot,))
+
+    db_rows = cur.fetchall()
+
+    cur.close()
+    conn.close()
 
     from_date = request.args.get("from_date","")
     to_date = request.args.get("to_date","")
@@ -1404,78 +1530,73 @@ def report(depot):
 
     filtered = []
 
-    for r in data:
+    for row in db_rows:
 
-        if r.get("depot") != depot:
+        row_date = str(row[0])
+        row_indent = str(row[1])
+        row_vehicle = str(row[2])
+        row_lf = str(row[3])
+        row_part = str(row[4])
+        row_item = str(row[5])
+        row_qty = str(row[6])
+        row_rate = str(row[7])
+        row_total = str(row[8])
+
+        if from_date and row_date < from_date:
             continue
 
-        if from_date and r.get("date","") < from_date:
+        if to_date and row_date > to_date:
             continue
 
-        if to_date and r.get("date","") > to_date:
-            continue
-
-        if vehicle and vehicle.lower() not in r.get("vehicle","").lower():
+        if vehicle and vehicle.lower() not in row_vehicle.lower():
             continue
 
         if item:
 
-            found = False
+            item_search = item.lower().split("|")[0].strip()
 
-            for x in r.get("items", []):
-
-                search_text = (
-                    str(x.get("lf_no","")) + " " +
-                    str(x.get("part_no","")) + " " +
-                    str(x.get("item_name",""))
-                ).lower()
-                if item.lower() in search_text:
-
-                
-                    found = True
-                    break
-
-            if not found:
+            if (
+                item_search not in row_lf.lower()
+                and item_search not in row_part.lower()
+                and item_search not in row_item.lower()
+            ):
                 continue
-
-        filtered.append(r)
+ 
+        filtered.append(row)
 
     rows = ""
 
-    for r in filtered:
+    for row in filtered:
 
-        for x in r.get("items", []):
+        rows += f"""
+        <tr>
 
-            rows += f"""
+        <td>{row[0]}</td>
 
-            <tr>
+        <td>
+        <a href="/indent_detail/{depot}/{row[1]}">
+        {row[1]}
+        </a>
+        </td>
 
-            <td>{r.get('date','')}</td>
+        <td>{row[2]}</td>
 
-            <td>
-            <a href="/indent_detail/{depot}/{r.get('indent_no','')}">
-            {r.get('indent_no','')}
-            </a>
-            </td>
+        <td>{row[3]}</td>
 
-            <td>{r.get('vehicle','')}</td>
+        <td>{row[4]}</td>
 
-            <td>{x.get('lf_no','')}</td>
+        <td>{row[5]}</td>
 
-            <td>{x.get('part_no','')}</td>
+        <td>{row[6]}</td>
 
-            <td>{x.get('item_name','')}</td>
+        <td>{row[7]}</td>
 
-            <td>{x.get('qty','')}</td>
+        <td>{row[8]}</td>
 
-            <td>{x.get('rate','')}</td>
+        </tr>
+        """
 
-            <td>{x.get('total','')}</td>
-
-            </tr>
-
-            """
-
+           
     if rows == "":
 
         rows = """
@@ -1604,7 +1725,7 @@ def report(depot):
 
     </div>
 
-    <form method="get">
+    <form method="get"
     autocomplete="off">
 
     From Date
@@ -1699,20 +1820,40 @@ def report(depot):
 def indent_detail(depot, indent_no):
     
     source = request.args.get("source","")
-    with open("data.json","r") as f:
-        data = json.load(f)
 
-    record = None
+    conn = get_conn()
+    cur = conn.cursor()
 
-    for r in data:
+    cur.execute("""
+    SELECT depot,date,vehicle,indent_no,technician,id
+    FROM indents 
+    WHERE depot=%s AND indent_no=%s 
+    """, (depot, indent_no))
 
-        if r.get("depot") == depot and r.get("indent_no") == indent_no:
+    record = cur.fetchone()
 
-            record = r
-            break
-
-    if record is None:
+    if not record:
+        cur.close()
+        conn.close()
         return "Indent Not Found"
+
+    cur.execute("""
+    SELECT
+    lf_no,
+    part_no,
+    item_name,
+    source,
+    qty,
+    rate,
+    total
+    FROM indent_items
+    WHERE indent_id=%s
+    """, (record[5],))
+
+    items = cur.fetchall()
+
+    cur.close()
+    conn.close()
     if source == "admin":
 
         back_link = "/admin_report"
@@ -1724,10 +1865,10 @@ def indent_detail(depot, indent_no):
 
     grand_total = 0
 
-    for item in record.get("items", []):
+    for item in items:
 
         try:
-            grand_total += float(item.get("total",0))
+            grand_total += float(item[6] or 0)
         except:
             pass
 
@@ -1735,13 +1876,13 @@ def indent_detail(depot, indent_no):
 
         <tr>
 
-        <td>{item.get('lf_no','')}</td>
-        <td>{item.get('part_no','')}</td>
-        <td>{item.get('item_name','')}</td>
-        <td>{item.get('source','')}</td>
-        <td>{item.get('qty','')}</td>
-        <td>{item.get('rate','')}</td>
-        <td>{item.get('total','')}</td>
+        <td>{item[0]}</td>
+        <td>{item[1]}</td>
+        <td>{item[2]}</td>
+        <td>{item[3]}</td>
+        <td>{item[4]}</td>
+        <td>{item[5]}</td>
+        <td>{item[6]}</td>
 
         </tr>
 
@@ -1842,15 +1983,15 @@ def indent_detail(depot, indent_no):
 
     <div class="info">
 
-    <p><b>Depot :</b> {record.get('depot','')}</p>
+    <p><b>Depot :</b> {record[0]}</p>
 
-    <p><b>Date :</b> {record.get('date','')}</p>
+    <p><b>Date :</b> {record[1]}</p>
 
-    <p><b>Vehicle :</b> {record.get('vehicle','')}</p>
+    <p><b>Vehicle :</b> {record[2]}</p>
 
-    <p><b>Indent No :</b> {record.get('indent_no','')}</p>
+    <p><b>Indent No :</b> {record[3]}</p>
 
-    <p><b>Technician :</b> {record.get('technician','')}</p>
+    <p><b>Technician :</b> {record[4]}</p>
 
     </div>
 
@@ -1890,11 +2031,32 @@ def indent_detail(depot, indent_no):
 def admin_report():
     if session.get("role") != "admin":
         return redirect("/login")
-    try:
-        with open("data.json","r") as f:
-            data = json.load(f)
-    except:
-        data = []
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+    SELECT
+        i.depot,
+        i.date,
+        i.vehicle,
+        i.indent_no,
+        i.technician,
+        d.lf_no,
+        d.part_no,
+        d.item_name,
+        d.source,
+        d.qty,
+        d.rate,
+        d.total
+    FROM indents i
+    JOIN indent_items d
+    ON i.id = d.indent_id
+    """)
+
+    data = cur.fetchall()
+
+    cur.close()
+    conn.close()
 
     depot = request.args.get("depot","")
     from_date = request.args.get("from_date","")
@@ -1906,57 +2068,32 @@ def admin_report():
 
     for r in data:
 
-        if depot and r.get("depot") != depot:
+        if depot and r[0] != depot:
             continue
 
-        if from_date and r.get("date","") < from_date:
+        if from_date and str(r[1]) < from_date:
+            continue
+ 
+        if to_date and str(r[1]) > to_date:
             continue
 
-        if to_date and r.get("date","") > to_date:
-            continue
-
-        if vehicle and vehicle.lower() not in r.get("vehicle","").lower():
+        if vehicle and vehicle.lower() not in str(r[2]).lower():
             continue
 
         if item:
 
-            found = False
+            item_search = item.lower().split("|")[0].strip()
 
-            selected_item = item.lower()
+            search_text = f"{r[5]} {r[6]} {r[7]}".lower()
 
-            if "|" in selected_item:
-
-                selected_item = selected_item.split("|")[0].strip()
-
-            for x in r.get("items", []):
-
-               
-                search_text = f"{x.get('lf_no','')} {x.get('part_no','')} {x.get('item_name','')}".lower()
-
-                if selected_item in search_text:
-
-                    found = True
-                    break
-
-            if not found:
-
+            if item_search not in search_text:
                 continue
 
         filtered.append(r)
 
     # ---------- ITEM OPTIONS ----------
 
-    item_set = set()
-
-    for row in data:
-
-        for x in row.get("items", []):
-
-            lf = x.get("lf_no","")
-            part = x.get("part_no","")
-            item_name = x.get("item_name","")
-
-            item_set.add(f"{lf} | {part} | {item_name}")
+   
     item_options = ""
 
     for _, row in item_df.iterrows():
@@ -1973,14 +2110,7 @@ def admin_report():
 
     # ---------- VEHICLE OPTIONS ----------
 
-    vehicle_set = set()
-
-    for row in data:
-
-        if depot and row.get("depot") != depot:
-            continue
-
-        vehicle_set.add(row.get("vehicle",""))
+    
 
     vehicle_options = ""
 
@@ -2032,74 +2162,37 @@ def admin_report():
 
     for r in filtered:
 
-        if len(r.get("items", [])) == 0:
+        rows += f"""
 
-            rows += f"""
+        <tr>
 
-            <tr>
-            <td>{r.get('date','')}</td>
-            <td>{r.get('depot','')}</td>
-            <td>{r.get('vehicle','')}</td>
-            <td>{r.get('indent_no','')}</td>
-            <td>{r.get('technician','')}</td>
-            <td colspan="5">No Item</td>
-            </tr>
+        <td>{r[1]}</td>
 
-            """
+        <td>{r[0]}</td>
 
-        else:
+        <td>{r[2]}</td>
 
-            for x in r.get("items", []):
-                if item:
+        <td>{r[3]}</td>
 
-                    selected_item = item.lower()
+        <td>{r[4]}</td>
 
-                    if "|" in selected_item:
+        <td>{r[5]}</td>
 
-                        selected_item = selected_item.split("|")[0].strip()
+        <td>{r[6]}</td>
 
-                    row_text = f"{x.get('lf_no','')} {x.get('part_no','')} {x.get('item_name','')}".lower()
+        <td>{r[7]}</td>
 
-                    if selected_item not in row_text:
+        <td>{r[8]}</td>
 
-                        continue
+        <td>{r[9]}</td>
 
-                rows += f"""
+        <td>{r[10]}</td>
+        
+        <td>{r[11]}</td>
 
-                <tr>
+        </tr>
 
-                <td>{r.get('date','')}</td>
- 
-                <td>{r.get('depot','')}</td>
-
-                <td>{r.get('vehicle','')}</td>
-
-                <td>
-
-                <a href="/indent_detail/{r.get('depot','')}/{r.get('indent_no','')}?source=admin">
-
-                {r.get('indent_no','')}
-
-                </a>
-
-                </td>
-
-                <td>{r.get('technician','')}</td>
-
-                <td>{x.get('lf_no','')}</td>
-
-                <td>{x.get('part_no','')}</td>
-
-                <td>{x.get('item_name','')}</td>
-
-                <td>{x.get('qty','')}</td>
-
-                <td>{x.get('rate','')}</td>
-                <td>{x.get('total','')}</td>
-
-                </tr>
-
-                """
+        """
 
     
     if rows == "":
@@ -2204,10 +2297,10 @@ padding:10px;
 }}
 
 td{{
-border:1px solid #ddd;
-padding:10px;
+    border:1px solid #ddd;
+    padding:6px;
+    font-size:12px;
 }}
-
 .summary{{
 background:#003d80;
 color:white;
@@ -2337,6 +2430,7 @@ onclick="window.print()">
 <th>LF No</th>
 <th>Part No</th>
 <th>Item Name</th>
+<th>Source</th>
 <th>Qty</th>
 <th>Rate</th>
 <th>Total</th>
@@ -2355,320 +2449,7 @@ onclick="window.print()">
 
 """
 
-@app.route("/admin_depot/<depot>")
-def admin_depot(depot):
 
-    with open("data.json","r") as f:
-        data = json.load(f)
-
-    date_count = {}
-
-    for r in data:
-
-        if r.get("depot") != depot:
-            continue
-
-        d = r.get("date","")
-
-        if d not in date_count:
-            date_count[d] = 0
-
-        date_count[d] += 1
-
-    rows = ""
-
-    for d,c in sorted(date_count.items(), reverse=True):
-
-        rows += f"""
-
-        <tr>
-
-        <td>
-
-        <a href="/admin_date/{depot}/{d}">
-
-        {d}
-
-        </a>
-
-        </td>
-
-        <td>{c}</td>
-
-        </tr>
-
-        """
-
-    return f"""
-
-    <html>
-
-    <head>
-
-    <title>{depot} Report</title>
-
-    <style>
-
-    body{{
-    font-family:Arial;
-    background:#eef2f7;
-    margin:0;
-    padding:20px;
-    }}
-
-    .box{{
-    background:white;
-    max-width:1200px;
-    margin:auto;
-    padding:25px;
-    border-radius:15px;
-    box-shadow:0 0 15px rgba(0,0,0,0.15);
-    }}
-
-    .header{{
-    background:#003d80;
-    color:white;
-    padding:15px;
-    border-radius:10px;
-    margin-bottom:20px;
-    }}
-
-    .btn{{
-    background:#28a745;
-    color:white;
-    padding:10px 20px;
-    text-decoration:none;
-    border-radius:5px;
-    font-weight:bold;
-    display:inline-block;
-    margin-bottom:15px;
-    }}
-
-    table{{
-    width:100%;
-    border-collapse:collapse;
-    }}
-
-    th{{
-    background:#003d80;
-    color:white;
-    padding:12px;
-    }}
-
-    td{{
-    padding:12px;
-    border:1px solid #ddd;
-    }}
-
-    tr:nth-child(even){{
-    background:#f8f8f8;
-    }}
-
-    tr:hover{{
-    background:#fff4cc;
-    }}
-
-    a{{
-    text-decoration:none;
-    font-weight:bold;
-    color:#003d80;
-    }}
-
-    </style>
-
-    </head>
-
-    <body>
-
-    <div class="box">
-
-    <a href="/admin_report" class="btn">
-
-    ← Back To Depot List
-
-    </a>
-
-    <div class="header">
-
-    <h2>{depot} Depot Report</h2>
-
-    </div>
-
-    <table>
-
-    <tr>
-
-    <th>Date</th>
-    <th>Total Indents</th>
-
-    </tr>
-
-    {rows}
-
-    </table>
-
-    </div>
-
-    </body>
-
-    </html>
-
-    """
-
-@app.route("/admin_date/<depot>/<date>")
-def admin_date(depot,date):
-
-    with open("data.json","r") as f:
-        data = json.load(f)
-
-    rows = ""
-
-    count = 0
-
-    for r in data:
-
-        if r.get("depot")==depot and r.get("date")==date:
-
-            count += 1
-
-            rows += f"""
-
-            <tr>
-
-            <td>{count}</td>
-
-            <td>
-
-            <a href="/indent_detail/{depot}/{r.get('indent_no')}?source=admin">
-
-            {r.get('indent_no')}
-
-            </a>
-
-            </td>
-
-            <td>{r.get('vehicle')}</td>
-
-            </tr>
-
-            """
-
-    return f"""
-
-    <html>
-
-    <head>
-
-    <title>{depot} {date}</title>
-
-    <style>
-
-    body{{
-    font-family:Arial;
-    background:#eef2f7;
-    margin:0;
-    padding:20px;
-    }}
-
-    .box{{
-    background:white;
-    max-width:1200px;
-    margin:auto;
-    padding:25px;
-    border-radius:15px;
-    box-shadow:0 0 15px rgba(0,0,0,0.15);
-    }}
-
-    .header{{
-    background:#003d80;
-    color:white;
-    padding:15px;
-    border-radius:10px;
-    margin-bottom:20px;
-    }}
-
-    .btn{{
-    background:#28a745;
-    color:white;
-    padding:10px 20px;
-    text-decoration:none;
-    border-radius:5px;
-    font-weight:bold;
-    display:inline-block;
-    margin-bottom:15px;
-    }}
-
-    table{{
-    width:100%;
-    border-collapse:collapse;
-    }}
-
-    th{{
-    background:#003d80;
-    color:white;
-    padding:12px;
-    }}
-
-    td{{
-    padding:12px;
-    border:1px solid #ddd;
-    }}
-
-    tr:nth-child(even){{
-    background:#f8f8f8;
-    }}
-
-    tr:hover{{
-    background:#fff4cc;
-    }}
-
-    a{{
-    text-decoration:none;
-    font-weight:bold;
-    color:#003d80;
-    }}
-
-    </style>
-
-    </head>
-
-    <body>
-
-    <div class="box">
-
-    <a href="/admin_depot/{depot}" class="btn">
-
-    ← Back To Date List
-
-    </a>
-
-    <div class="header">
-
-    <h2>{depot} - {date}</h2>
-
-    </div>
-
-    <table>
-
-    <tr>
-
-    <th>S.No.</th>
-    <th>Indent No</th>
-    <th>Vehicle</th>
-
-    </tr>
-
-    {rows}
-
-    </table>
-
-    </div>
-
-    </body>
-
-    </html>
-
-    """
 
 @app.route("/supervisor_report")
 def supervisor_report():
@@ -2681,11 +2462,27 @@ def supervisor_report():
     to_date = request.args.get("to_date","")
     days = request.args.get("days","")
 
-    try:
-        with open("data.json","r") as f:
-            data = json.load(f)
-    except:
-        data = []
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+    SELECT
+        i.date,
+        i.depot,
+        i.vehicle,
+        d.lf_no,
+        d.part_no,
+        d.item_name,
+        d.qty
+    FROM indents i
+    JOIN indent_items d
+    ON i.id = d.indent_id
+    """)
+
+    data = cur.fetchall()
+
+    cur.close()
+    conn.close()
 
     if days == "7":
 
@@ -2730,57 +2527,51 @@ def supervisor_report():
 
         for r in data:
 
-            if str(r.get("vehicle","")).lower() != vehicle.lower():
+            if str(r[2]).lower() != vehicle.lower():
                 continue
 
-            if from_date and r.get("date","") < from_date:
+            if from_date and str(r[0]) < from_date:
                 continue
 
-            if to_date and r.get("date","") > to_date:
+            if to_date and str(r[0]) > to_date:
                 continue
 
-            for x in r.get("items",[]):
+            try:
+                qty = int(float(r[6] or 0))
+            except:
+                qty = 0
 
-                try:
-                    qty = int(float(x.get("qty",0)))
-                except:
-                    qty = 0
+            total_qty += qty
 
-                total_qty += qty
+            rows += f"""
+            <tr>
 
-                rows += f"""
-                <tr>
+            <td>{r[0]}</td>
 
-                <td>{r.get('date','')}</td>
+            <td>{r[1]}</td>
 
-                <td>{r.get('depot','')}</td>
+            <td>{r[2]}</td>
 
-                <td>{r.get('vehicle','')}</td>
+            <td>{r[3]}</td>
 
-                <td>{x.get('lf_no','')}</td>
+            <td>{r[4]}</td>
 
-                <td>{x.get('part_no','')}</td>
+            <td>{r[5]}</td>
 
-                <td>{x.get('item_name','')}</td>
+            <td>{qty}</td>
 
-                <td>{qty}</td>
-
-                </tr>
-                """
-
+            </tr>
+            """
     if rows == "":
 
         rows = """
         <tr>
         <td colspan="7"
-        style="text-align:center;
-        color:red;
-        font-weight:bold;">
+        style="text-align:center;color:red;font-weight:bold;">
         No Record Found
         </td>
         </tr>
-        """
-
+        """    
     return f"""
 
 <!DOCTYPE html>
