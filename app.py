@@ -10,6 +10,8 @@ import psycopg2
 app = Flask(__name__)
 app.secret_key = "rsrtc2026"
 
+import os
+
 DATABASE_URL = os.environ.get("DATABASE_URL")
 conn = psycopg2.connect(DATABASE_URL)
 
@@ -623,13 +625,13 @@ required>
 
 <tr>
 
-<th style="width:10%">LF No</th>
+<th style="width:20%">LF No</th>
 
-<th style="width:15%">Part No</th>
+<th style="width:10%">Part No</th>
 
 <th style="width:35%">Item Name</th>
 
-<th style="width:15%">Source</th>
+<th style="width:10%">Source</th>
 
 <th style="width:7%">Qty</th>
 
@@ -673,6 +675,7 @@ onkeyup="calcRow(this)">
 <input
 type="number"
 name="rate[]"
+step="0.01"
 required
 onkeyup="calcRow(this)">
 </td>
@@ -968,6 +971,7 @@ onkeyup="calcRow(this)">
 <td>
 <input type="number"
 name="rate[]"
+step="0.01"
 required
 onkeyup="calcRow(this)">
 </td>
@@ -1014,7 +1018,7 @@ row.cells[5]
 
 row.cells[6]
 .querySelector("input").value =
-qty * PerItomRate;
+(qty * PerItomRate).toFixed(2);
 
 calculateGrand();
 
@@ -1036,7 +1040,7 @@ Number(totals[i].value || 0);
 
 document
 .getElementById("grandTotal")
-.innerHTML = grand;
+.innerHTML = grand.toFixed(2);
 
 }}
 
@@ -2495,8 +2499,9 @@ def download_database():
 
     conn.close()
 
-    filename = "RSRTC_DATABASE.xlsx"
+    from datetime import datetime
 
+    filename = f"RSRTC_DATABASE_{datetime.now().strftime('%d-%m-%Y_%H-%M-%S')}.xlsx"
     df.to_excel(filename, index=False)
 
     return send_file(
