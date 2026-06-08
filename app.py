@@ -2339,7 +2339,19 @@ font-weight:bold;
 ← Logout
 
 </a>
-
+<a href="/download_database"
+style="
+background:green;
+color:white;
+padding:10px 20px;
+text-decoration:none;
+border-radius:5px;
+display:inline-block;
+margin-left:10px;
+font-weight:bold;
+">
+⬇ Download Database
+</a>
 <h2>RSRTC ADMIN REPORT</h2>
 
 <div class="summary">
@@ -2449,7 +2461,48 @@ onclick="window.print()">
 
 """
 
+from flask import send_file
+import pandas as pd
 
+@app.route("/download_database")
+def download_database():
+
+    if session.get("role") != "admin":
+        return redirect("/login")
+
+    conn = get_conn()
+
+    query = """
+    SELECT
+        i.depot,
+        i.date,
+        i.vehicle,
+        i.indent_no,
+        i.technician,
+        d.lf_no,
+        d.part_no,
+        d.item_name,
+        d.source,
+        d.qty,
+        d.rate,
+        d.total
+    FROM indents i
+    JOIN indent_items d
+    ON i.id = d.indent_id
+    """
+
+    df = pd.read_sql(query, conn)
+
+    conn.close()
+
+    filename = "RSRTC_DATABASE.xlsx"
+
+    df.to_excel(filename, index=False)
+
+    return send_file(
+        filename,
+        as_attachment=True
+    )
 
 @app.route("/supervisor_report")
 def supervisor_report():
