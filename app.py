@@ -4,15 +4,23 @@ import pandas as pd
 vehicle_df = pd.read_excel("VEHAPR26.xlsx")
 item_df = pd.read_excel("Itom list.xlsx")
 from flask import Flask,request,redirect,session
+from psycopg2.pool import SimpleConnectionPool
 import os
 import psycopg2
+import html
 
 app = Flask(__name__)
 app.secret_key = "rsrtc2026"
 
 import os
 
+
 DATABASE_URL = os.environ.get("DATABASE_URL")
+pool = SimpleConnectionPool(
+    1,    # minimum connections
+    20,   # maximum connections
+    DATABASE_URL
+)
 conn = psycopg2.connect(DATABASE_URL)
 
 cur = conn.cursor()
@@ -63,7 +71,7 @@ cur.close()
 conn.close()
 
 def get_conn():
-    return psycopg2.connect(DATABASE_URL)
+    return pool.getconn()
 
 
 DEPOTS = [
@@ -353,6 +361,9 @@ def make_indent(depot):
     lf_options = ""
     part_options = ""
     item_options = ""
+    
+
+    master_options = ""
 
     for _, r in item_df.iterrows():
 
@@ -360,9 +371,23 @@ def make_indent(depot):
         part = str(r["PartNo"])
         item = str(r["PartDesc"])
 
-        lf_options += f'<option value="{lf}">'
-        part_options += f'<option value="{part}">'
-        item_options += f'<option value="{item}">'
+        import html
+
+        master_options += f'''
+        <option value="{html.escape(lf)} | {html.escape(part)} | {html.escape(item)}">
+        '''
+
+
+
+    for _, r in item_df.iterrows():
+
+        lf = str(r["LFNo"])
+        part = str(r["PartNo"])
+        item = str(r["PartDesc"])
+
+        lf_options += f'<option value="{html.escape(lf)}">'
+        part_options += f'<option value="{html.escape(part)}">'
+        item_options += f'<option value="{html.escape(item)}">'
 
     # AUTO FILL MASTER
 
@@ -467,8 +492,45 @@ table{{
     width:100%;
     border-collapse:collapse;
     margin-top:15px;
-    overflow:hidden;
     border-radius:10px;
+}}
+
+@media(max-width:768px){{
+
+table{{
+    display:block;
+    overflow-x:auto;
+    white-space:nowrap;
+}}
+
+table td:nth-child(1) input{{
+    min-width:140px;
+}}
+
+table td:nth-child(2) input{{
+    min-width:80px;
+}}
+
+table td:nth-child(3) input{{
+    min-width:300px;
+}}
+
+table td:nth-child(4) select{{
+    min-width:120px;
+}}
+
+table td:nth-child(5) input{{
+    min-width:100px;
+}}
+
+table td:nth-child(6) input{{
+    min-width:80px;
+}}
+
+table td:nth-child(7) input{{
+    min-width:120px;
+}}
+
 }}
 
 table th{{
@@ -600,6 +662,12 @@ required>
 <datalist id="itemlist">
 {item_options}
 </datalist>
+
+<datalist id="masterlist">
+
+{master_options}
+
+</datalist>
 <label>Indent Number</label>
 
 <input
@@ -646,16 +714,17 @@ required>
 <tr>
 
 <td>
-<input
-list="lflist"
-name="lf_no[]"
-oninput="fillFromLF(this)"
-onblur="validateLF(this)">
+<input list="masterlist" name="lf_no[]" oninput="fillFromLF(this)">
 </td>
 
-<td><input list="partlist" name="part_no[]" oninput="fillFromPart(this)" onblur="validatePart(this)"></td>
+<td>
+<input list="masterlist" name="part_no[]" oninput="fillFromPart(this)">
+</td>
 
-<td><input list="itemlist" name="item_name[]" oninput="fillFromItem(this)" onblur="validateItem(this)"></td>
+<td>
+<input list="masterlist" name="item_name[]" oninput="fillFromItem(this)">
+</td>
+
 <td>
 <select name="source[]">
 <option>Central Store</option>
@@ -751,7 +820,8 @@ function fillFromLF(el){{
 
     let row = el.closest("tr");
 
-    let lf = el.value.trim();
+    let lf = el.value.split("|")[0].trim();
+    el.value = lf;
 
     if(lf === ""){{
 
@@ -781,17 +851,20 @@ function fillFromLF(el){{
 
     if(!found){{
 
-        row.querySelector('[name="part_no[]"]').value = "";
-        row.querySelector('[name="item_name[]"]').value = "";
+    row.querySelector('[name="part_no[]"]').value = "";
+    row.querySelector('[name="item_name[]"]').value = "";
+    return;
     }}
-
 }}
 
 function fillFromPart(el){{
 
     let row = el.closest("tr");
 
-    let part = el.value.trim();
+    let p = el.value.split("|");
+
+    let part = (p[1] || p[0]).trim();
+    el.value = part;
 
     if(part === ""){{
 
@@ -823,6 +896,8 @@ function fillFromPart(el){{
 
         row.querySelector('[name="lf_no[]"]').value = "";
         row.querySelector('[name="item_name[]"]').value = "";
+
+        return;
     }}
 
 }}
@@ -831,7 +906,10 @@ function fillFromItem(el){{
 
     let row = el.closest("tr");
 
-    let item = el.value.trim();
+    let p = el.value.split("|");
+
+    let item = (p[2] || p[0]).trim();
+    el.value = item;
 
     if(item === ""){{
 
@@ -863,9 +941,12 @@ function fillFromItem(el){{
 
         row.querySelector('[name="lf_no[]"]').value = "";
         row.querySelector('[name="part_no[]"]').value = "";
+        return;
     }}
 
 }}
+
+
 
 function validateLF(el){{
 
@@ -944,16 +1025,16 @@ table.insertRow();
 row.innerHTML = `
 
 <td>
-<input
-list="lflist"
-name="lf_no[]"
-oninput="fillFromLF(this)"
-onblur="validateLF(this)">
+<input list="masterlist" name="lf_no[]" oninput="fillFromLF(this)">
 </td>
 
-<td><input list="partlist" name="part_no[]" oninput="fillFromPart(this)" onblur="validatePart(this)"></td>
+<td>
+<input list="masterlist" name="part_no[]" oninput="fillFromPart(this)">
+</td>
 
-<td><input list="itemlist" name="item_name[]" oninput="fillFromItem(this)" onblur="validateItem(this)"></td>
+<td>
+<input list="masterlist" name="item_name[]" oninput="fillFromItem(this)">
+</td>
 <td>
 <select name="source[]">
 <option>Central Store</option>
@@ -1252,11 +1333,10 @@ Grand Total : ₹ {grand_total}
 <input type="hidden" name="indent_no" value="{indent_no}">
 <input type="hidden" name="technician" value="{technician}">
 
-{"".join([f'<input type="hidden" name="lf_no[]" value="{x}">' for x in lf_list])}
+{"".join([f'<input type="hidden" name="lf_no[]" value="{html.escape(str(x))}">' for x in lf_list])}
+{"".join([f'<input type="hidden" name="part_no[]" value="{html.escape(str(x))}">' for x in part_list])}
 
-{"".join([f'<input type="hidden" name="part_no[]" value="{x}">' for x in part_list])}
-
-{"".join([f'<input type="hidden" name="item_name[]" value="{x}">' for x in item_list])}
+{"".join([f'<input type="hidden" name="item_name[]" value="{html.escape(str(x))}">' for x in item_list])}
 
 {"".join([f'<input type="hidden" name="qty[]" value="{x}">' for x in qty_list])}
 
@@ -1298,7 +1378,12 @@ FINAL SAVE
 def save_indent():
 
     valid_lf = set(item_df["LFNo"].astype(str))
-    valid_part = set(item_df["PartNo"].astype(str))
+    valid_part = set(
+        item_df["PartNo"]
+        .fillna("")
+        .astype(str)
+        .str.strip()
+    )
     valid_item = set(item_df["PartDesc"].astype(str))
 
     for lf in request.form.getlist("lf_no[]"):
@@ -1306,8 +1391,16 @@ def save_indent():
             return "Invalid LF Number"
 
     for part in request.form.getlist("part_no[]"):
+
+        part = str(part).strip()
+
         if part and part not in valid_part:
-            return "Invalid Part Number"
+
+            return f"""
+            Invalid Part Number<br><br>
+
+            FORM = {repr(part)}
+            """
 
     for item in request.form.getlist("item_name[]"):
         if item and item not in valid_item:
@@ -1377,7 +1470,7 @@ def save_indent():
     if cur.fetchone():
 
         cur.close()
-        conn.close()
+        pool.putconn(conn)
 
         return "Indent Number Already Exists"
 
@@ -1431,7 +1524,7 @@ def save_indent():
     conn.commit()
 
     cur.close()
-    conn.close()
+    pool.putconn(conn)
 
     return f"""
     <!DOCTYPE html>
@@ -1487,12 +1580,13 @@ def report(depot):
     JOIN indent_items d
     ON i.id = d.indent_id
     WHERE i.depot = %s
+    ORDER BY i.id DESC
     """, (depot,))
 
     db_rows = cur.fetchall()
 
     cur.close()
-    conn.close()
+    pool.putconn(conn)
 
     from_date = request.args.get("from_date","")
     to_date = request.args.get("to_date","")
@@ -1567,10 +1661,21 @@ def report(depot):
                 continue
  
         filtered.append(row)
+    page = int(request.args.get("page", 1))
+
+    per_page = 50
+
+    total_records = len(filtered)
+
+    start = (page - 1) * per_page
+
+    end = start + per_page
+
+    page_records = filtered[start:end]
 
     rows = ""
 
-    for row in filtered:
+    for row in page_records:
 
         rows += f"""
         <tr>
@@ -1600,7 +1705,41 @@ def report(depot):
         </tr>
         """
 
-           
+    total_pages = (total_records + per_page - 1) // per_page
+
+    pagination = ""
+
+    start_page = max(1, page - 5)
+    end_page = min(total_pages, page + 5)
+
+    for p in range(start_page, end_page + 1):
+
+        if p == page:
+
+            pagination += f"""
+            <span style="
+            padding:8px 12px;
+            background:#003d80;
+            color:white;
+            margin:2px;
+            border-radius:5px;">
+            {p}
+            </span>
+            """
+
+        else:
+
+            pagination += f"""
+            <a href="?page={p}&from_date={from_date}&to_date={to_date}&vehicle={vehicle}&item={item}"
+            style="
+            padding:8px 12px;
+            background:#eee;
+            margin:2px;
+            border-radius:5px;
+            text-decoration:none;">
+            {p}
+            </a>
+            """       
     if rows == "":
 
         rows = """
@@ -1660,15 +1799,17 @@ def report(depot):
         border-collapse:collapse;
     }}
 
+    td{{
+        border:1px solid #ddd;
+        padding:6px;
+        font-size:12px;
+    }}
+
     th{{
         background:#003d80;
         color:white;
-        padding:10px;
-    }}
-
-    td{{
-        border:1px solid #ddd;
-        padding:10px;
+        padding:6px;
+        font-size:12px;
     }}
 
     input{{
@@ -1810,6 +1951,14 @@ def report(depot):
     {rows}
 
     </table>
+    <div style="
+    text-align:center;
+    margin-top:20px;
+    ">
+
+    {pagination}
+
+    </div>
 
     </div>
 
@@ -1838,7 +1987,7 @@ def indent_detail(depot, indent_no):
 
     if not record:
         cur.close()
-        conn.close()
+        pool.putconn(conn)
         return "Indent Not Found"
 
     cur.execute("""
@@ -1857,7 +2006,7 @@ def indent_detail(depot, indent_no):
     items = cur.fetchall()
 
     cur.close()
-    conn.close()
+    pool.putconn(conn)
     if source == "admin":
 
         back_link = "/admin_report"
@@ -2055,12 +2204,13 @@ def admin_report():
     FROM indents i
     JOIN indent_items d
     ON i.id = d.indent_id
+    ORDER BY i.id DESC
     """)
 
     data = cur.fetchall()
 
     cur.close()
-    conn.close()
+    pool.putconn(conn)
 
     depot = request.args.get("depot","")
     from_date = request.args.get("from_date","")
@@ -2094,7 +2244,17 @@ def admin_report():
                 continue
 
         filtered.append(r)
+    page = int(request.args.get("page", 1))
 
+    per_page = 100
+
+    total_records = len(filtered)
+
+    start = (page - 1) * per_page
+
+    end = start + per_page
+
+    page_records = filtered[start:end]    
     # ---------- ITEM OPTIONS ----------
 
    
@@ -2164,48 +2324,82 @@ def admin_report():
 
     rows = ""
 
-    for r in filtered:
+    for row in page_records:
 
         rows += f"""
 
         <tr>
 
-        <td>{r[1]}</td>
+        <td>{row[1]}</td>
 
-        <td>{r[0]}</td>
+        <td>{row[0]}</td>
 
-        <td>{r[2]}</td>
+        <td>{row[2]}</td>
 
-        <td>{r[3]}</td>
+        <td>{row[3]}</td>
 
-        <td>{r[4]}</td>
+        <td>{row[4]}</td>
 
-        <td>{r[5]}</td>
+        <td>{row[5]}</td>
 
-        <td>{r[6]}</td>
+        <td>{row[6]}</td>
 
-        <td>{r[7]}</td>
+        <td>{row[7]}</td>
 
-        <td>{r[8]}</td>
+        <td>{row[8]}</td>
 
-        <td>{r[9]}</td>
+        <td>{row[9]}</td>
 
-        <td>{r[10]}</td>
+        <td>{row[10]}</td>
         
-        <td>{r[11]}</td>
+        <td>{row[11]}</td>
 
         </tr>
 
         """
 
-    
+    total_pages = (total_records + per_page - 1) // per_page
+
+    pagination = ""
+
+    start_page = max(1, page - 5)
+    end_page = min(total_pages, page + 5)
+
+    for p in range(start_page, end_page + 1):
+        if p == page:
+
+            pagination += f"""
+            <span style="
+            padding:8px 12px;
+            background:#003d80;
+            color:white;
+            margin:2px;
+            border-radius:5px;">
+            {p}
+            </span>
+            """
+
+        else:
+
+            pagination += f"""
+            <a href="?page={p}&depot={depot}&from_date={from_date}&to_date={to_date}&vehicle={vehicle}&item={item}"
+            style="
+            padding:8px 12px;
+            background:#eee;
+            margin:2px;
+            border-radius:5px;
+            text-decoration:none;">
+            {p}
+            </a>
+            """
+ 
     if rows == "":
 
         rows = """
 
         <tr>
 
-        <td colspan="11"
+        <td colspan="12"
         style="text-align:center;color:red;font-weight:bold;">
 
         No Record Found
@@ -2294,14 +2488,15 @@ border-collapse:collapse;
 margin-top:20px;
 }}
 
-th{{
-background:#003d80;
-color:white;
-padding:10px;
-}}
-
 td{{
     border:1px solid #ddd;
+    padding:6px;
+    font-size:12px;
+}}
+
+th{{
+    background:#003d80;
+    color:white;
     padding:6px;
     font-size:12px;
 }}
@@ -2404,6 +2599,7 @@ All Vehicles
 type="text"
 name="item"
 list="itemlist"
+value="{item}"
 placeholder="LF No / Part No / Item Name">
 
 <datalist id="itemlist">
@@ -2456,7 +2652,14 @@ onclick="window.print()">
 {rows}
 
 </table>
+<div style="
+text-align:center;
+margin-top:20px;
+">
 
+{pagination}
+
+</div>
 </div>
 
 </body>
@@ -2467,6 +2670,7 @@ onclick="window.print()">
 
 from flask import send_file
 import pandas as pd
+from datetime import datetime
 
 @app.route("/download_database")
 def download_database():
@@ -2493,22 +2697,23 @@ def download_database():
     FROM indents i
     JOIN indent_items d
     ON i.id = d.indent_id
+    ORDER BY i.id DESC
     """
 
-    df = pd.read_sql(query, conn)
+    try:
+        df = pd.read_sql(query, conn)
 
-    conn.close()
-
-    from datetime import datetime
+    finally:
+        pool.putconn(conn)
 
     filename = f"RSRTC_DATABASE_{datetime.now().strftime('%d-%m-%Y_%H-%M-%S')}.xlsx"
+
     df.to_excel(filename, index=False)
 
     return send_file(
         filename,
         as_attachment=True
     )
-
 @app.route("/supervisor_report")
 def supervisor_report():
     if session.get("role") != "supervisor":
@@ -2540,7 +2745,7 @@ def supervisor_report():
     data = cur.fetchall()
 
     cur.close()
-    conn.close()
+    pool.putconn(conn)
 
     if days == "7":
 
@@ -2833,4 +3038,4 @@ Print
 
 """
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run()
