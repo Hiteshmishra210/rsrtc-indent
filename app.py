@@ -736,6 +736,8 @@ required>
 <input
 type="number"
 name="qty[]"
+step="0.5"
+min="0.5"
 required
 onkeyup="calcRow(this)">
 </td>
@@ -1045,6 +1047,8 @@ row.innerHTML = `
 <td>
 <input type="number"
 name="qty[]"
+step="0.5"
+min="0.5"
 required
 onkeyup="calcRow(this)">
 </td>
