@@ -2,7 +2,7 @@ import pandas as pd
 
 
 vehicle_df = pd.read_excel("VEHAPR26.xlsx")
-item_df = pd.read_excel("Itom list.xlsx")
+item_df = pd.read_excel("Item list.xlsx")
 from flask import Flask,request,redirect,session
 from psycopg2.pool import SimpleConnectionPool
 import os
@@ -234,8 +234,6 @@ href="/static/style.css">
 
 <style>
 
-<style>
-
 .topbar{{
 text-align:right;
 padding:15px;
@@ -317,13 +315,27 @@ margin-bottom:15px;
 
 </div>
 
+<div style="
+background:#003d80;
+color:white;
+padding:15px;
+border-radius:10px;
+text-align:center;
+font-size:24px;
+font-weight:bold;
+margin-bottom:20px;
+">
+
+Welcome To {depot} Depot
+
+</div>
 <div class="container">
 
 <div class="card">
 
 <h2>Indent Detail</h2>
 
-<a href="/Indent Detail(Itom wise)/{depot}">
+<a href="/Indent Detail(Item wise)/{depot}">
 Open
 </a>
 
@@ -346,7 +358,7 @@ Open
 """
 
 
-@app.route("/Indent Detail(Itom wise)/<depot>")
+@app.route("/Indent Detail(Item wise)/<depot>")
 def make_indent(depot):
 
     depot_vehicles = vehicle_df[
@@ -503,32 +515,40 @@ table{{
     white-space:nowrap;
 }}
 
-table td:nth-child(1) input{{
-    min-width:140px;
+table td:nth-child(1) select{{
+    min-width:120px;
 }}
 
 table td:nth-child(2) input{{
-    min-width:80px;
+    min-width:140px;
 }}
 
 table td:nth-child(3) input{{
-    min-width:300px;
-}}
-
-table td:nth-child(4) select{{
-    min-width:120px;
-}}
-
-table td:nth-child(5) input{{
     min-width:100px;
 }}
 
+table td:nth-child(4) input{{
+    min-width:340px;
+}}
+
+table td:nth-child(5) select{{
+    min-width:140px;
+}}
+
 table td:nth-child(6) input{{
-    min-width:80px;
+    min-width:100px;
 }}
 
 table td:nth-child(7) input{{
+    min-width:100px;
+}}
+
+table td:nth-child(8) input{{
     min-width:120px;
+}}
+
+table td:nth-child(9) button{{
+    min-width:50px;
 }}
 
 }}
@@ -624,7 +644,10 @@ table tr:nth-child(even){{
 
 </div>
 
-<form method="post" action="/preview_indent">
+<form
+method="post"
+action="/preview_indent"
+onsubmit="return validateForm()">
 
 <input type="hidden"
 name="depot"
@@ -692,18 +715,18 @@ required>
 <table id="itemTable">
 
 <tr>
-
-<th style="width:20%">LF No</th>
+<th style="width:10%">Type</th>
+<th style="width:15%">LF No</th>
 
 <th style="width:10%">Part No</th>
 
-<th style="width:35%">Item Name</th>
+<th style="width:30%">Item Name</th>
 
 <th style="width:10%">Source</th>
 
 <th style="width:7%">Qty</th>
 
-<th style="width:8%">Per Itom Rate</th>
+<th style="width:8%">Per Item Rate</th>
 
 <th style="width:8%">Total</th>
 
@@ -712,7 +735,19 @@ required>
 </tr>
 
 <tr>
+<td>
+<select name="item_type[]" onchange="changeType(this)">
 
+<option value="LF">LF Item</option>
+
+<option value="RC">RC Assembly</option>
+
+<option value="LP">Local Purchase</option>
+
+<option value="OIL">Oil & Lubricants</option>
+
+</select>
+</td>
 <td>
 <input list="masterlist" name="lf_no[]" oninput="fillFromLF(this)">
 </td>
@@ -791,7 +826,7 @@ Grand Total :
 
 <button type="submit"
 onclick="return confirmIndent()">
-PREVIEW
+PREVIEW & SUBMIT
 </button>
 
 
@@ -821,6 +856,13 @@ const itemMaster = {item_master_json};
 function fillFromLF(el){{
 
     let row = el.closest("tr");
+
+    let type =
+    row.querySelector('[name="item_type[]"]').value;
+
+    if(type!="LF"){{
+        return;
+    }}
 
     let lf = el.value.split("|")[0].trim();
     el.value = lf;
@@ -862,6 +904,12 @@ function fillFromLF(el){{
 function fillFromPart(el){{
 
     let row = el.closest("tr");
+    let type =
+    row.querySelector('[name="item_type[]"]').value;
+
+    if(type!="LF"){{
+        return;
+    }}
 
     let p = el.value.split("|");
 
@@ -907,6 +955,12 @@ function fillFromPart(el){{
 function fillFromItem(el){{
 
     let row = el.closest("tr");
+    let type =
+    row.querySelector('[name="item_type[]"]').value;
+
+    if(type!="LF"){{
+        return;
+    }}
 
     let p = el.value.split("|");
 
@@ -1016,6 +1070,133 @@ function validateItem(el){{
     }}
 }}
 
+function changeType(el){{
+
+    let row = el.closest("tr");
+
+    let type = el.value;
+
+    let lf = row.querySelector('[name="lf_no[]"]');
+    let part = row.querySelector('[name="part_no[]"]');
+    let item = row.querySelector('[name="item_name[]"]');
+
+    if(type=="LF"){{
+
+        lf.value="";
+        part.value="";
+        item.value="";
+
+        lf.readOnly=false;
+        part.readOnly=false;
+        item.readOnly=false;
+        lf.setAttribute("list","masterlist");
+        part.setAttribute("list","masterlist");
+        item.setAttribute("list","masterlist");
+        let source =
+        row.querySelector('[name="source[]"]');
+
+        source.innerHTML = `
+        <option>Central Store</option>
+        <option>Local Purchase</option>
+        `;
+            }}
+        
+
+    if(type=="RC"){{
+
+        lf.value="RC";
+        part.value="RC";
+        item.value="";
+
+        lf.readOnly=true;
+        part.readOnly=true;
+        item.readOnly=false;
+        lf.removeAttribute("list");
+        part.removeAttribute("list");
+        item.removeAttribute("list");
+        item.setAttribute("autocomplete","off");
+        
+
+        let source =
+        row.querySelector('[name="source[]"]');
+
+        source.innerHTML = `
+        <option>Central Workshop</option>
+        `;
+
+        source.value = "Central Workshop";
+            }}
+
+    if(type=="LP"){{
+
+        lf.value="LP";
+        part.value="LP";
+        item.value="";
+
+        lf.readOnly=true;
+        part.readOnly=true;
+        item.readOnly=false;
+        lf.removeAttribute("list");
+        part.removeAttribute("list");
+        item.removeAttribute("list");
+        item.setAttribute("autocomplete","off");
+
+        let source =
+        row.querySelector('[name="source[]"]');
+
+        source.innerHTML = `
+        <option>Local Purchase</option>
+        `;
+
+        source.value = "Local Purchase";
+            }}
+
+    if(type=="OIL"){{
+
+        lf.value="OIL";
+        part.value="OIL";
+        item.value="";
+
+        lf.readOnly=true;
+        part.readOnly=true;
+        item.readOnly=false;
+        lf.removeAttribute("list");
+        part.removeAttribute("list");
+        item.removeAttribute("list");
+        item.setAttribute("autocomplete","off");
+
+        let source =
+        row.querySelector('[name="source[]"]');
+
+        source.innerHTML = `
+        <option>Central Store</option>
+        <option>Local Purchase</option>
+        `;
+            }}
+}}
+
+function validateForm(){{
+
+    let totals =
+    document.getElementsByName("total[]");
+
+    for(let i=0;i<totals.length;i++){{
+
+        if(
+            totals[i].value == "" ||
+            Number(totals[i].value) <= 0
+        ){{
+
+            alert(
+            "Please fill item quantity again and Total."
+            );
+
+            return false;
+        }}
+    }}
+
+    return true;
+}}
 function addRow(){{
 
 let table =
@@ -1026,6 +1207,19 @@ table.insertRow();
 
 row.innerHTML = `
 
+<td>
+<select name="item_type[]" onchange="changeType(this)">
+
+<option value="LF">LF Item</option>
+
+<option value="RC">RC Assembly</option>
+
+<option value="LP">Local Purchase</option>
+
+<option value="OIL">Oil & Lubricants</option>
+
+</select>
+</td>
 <td>
 <input list="masterlist" name="lf_no[]" oninput="fillFromLF(this)">
 </td>
@@ -1094,16 +1288,16 @@ let row =
 el.parentNode.parentNode;
 
 let qty =
-row.cells[4]
-.querySelector("input").value || 0;
-
-let PerItomRate =
 row.cells[5]
 .querySelector("input").value || 0;
 
+let PerItemRate =
 row.cells[6]
+.querySelector("input").value || 0;
+
+row.cells[7]
 .querySelector("input").value =
-(qty * PerItomRate).toFixed(2);
+(qty * PerItemRate).toFixed(2);
 
 calculateGrand();
 
@@ -1128,6 +1322,8 @@ document
 .innerHTML = grand.toFixed(2);
 
 }}
+ 
+
 
 </script>
 
@@ -1157,12 +1353,14 @@ def preview_indent():
     rate_list = request.form.getlist("rate[]")
     total_list = request.form.getlist("total[]")
     source_list = request.form.getlist("source[]")
+    item_type_list = request.form.getlist("item_type[]")
 
     for i in range(len(item_list)):
 
         rows += f"""
 
         <tr>
+        <td>{item_type_list[i]}</td>
         <td>{lf_list[i]}</td>
         <td>{part_list[i]}</td>
         <td>{item_list[i]}</td>
@@ -1312,6 +1510,7 @@ INDENT PREVIEW
 <table>
 
 <tr>
+<th>Type</th>
 <th>LF No</th>
 <th>Part No</th>
 <th>Item Name</th>
@@ -1336,6 +1535,9 @@ Grand Total : ₹ {grand_total}
 <input type="hidden" name="vehicle" value="{vehicle}">
 <input type="hidden" name="indent_no" value="{indent_no}">
 <input type="hidden" name="technician" value="{technician}">
+
+
+{"".join([f'<input type="hidden" name="item_type[]" value="{x}">' for x in item_type_list])}
 
 {"".join([f'<input type="hidden" name="lf_no[]" value="{html.escape(str(x))}">' for x in lf_list])}
 {"".join([f'<input type="hidden" name="part_no[]" value="{html.escape(str(x))}">' for x in part_list])}
@@ -1390,11 +1592,22 @@ def save_indent():
     )
     valid_item = set(item_df["PartDesc"].astype(str))
 
-    for lf in request.form.getlist("lf_no[]"):
+    item_types = request.form.getlist("item_type[]")
+
+    for i, lf in enumerate(request.form.getlist("lf_no[]")):
+
+        if item_types[i] != "LF":
+            continue
+
         if lf and lf not in valid_lf:
             return "Invalid LF Number"
 
-    for part in request.form.getlist("part_no[]"):
+    part_list = request.form.getlist("part_no[]")
+
+    for i, part in enumerate(part_list):
+
+        if item_types[i] != "LF":
+            continue
 
         part = str(part).strip()
 
@@ -1406,7 +1619,13 @@ def save_indent():
             FORM = {repr(part)}
             """
 
-    for item in request.form.getlist("item_name[]"):
+    item_list = request.form.getlist("item_name[]")
+
+    for i, item in enumerate(item_list):
+
+        if item_types[i] != "LF":
+            continue
+
         if item and item not in valid_item:
             return "Invalid Item Name"
 
@@ -1537,7 +1756,7 @@ def save_indent():
     <head>
 
     <meta http-equiv="refresh"
-    content="2;url=/Indent Detail(Itom wise)/{depot}">
+    content="2;url=/Indent Detail(Item wise)/{depot}">
 
     <link rel="stylesheet"
     href="/static/style.css">
@@ -1574,6 +1793,8 @@ def report(depot):
         i.date,
         i.indent_no,
         i.vehicle,
+        i.technician,
+        d.source,
         d.lf_no,
         d.part_no,
         d.item_name,
@@ -1596,6 +1817,7 @@ def report(depot):
     to_date = request.args.get("to_date","")
     vehicle = request.args.get("vehicle","")
     item = request.args.get("item","")
+    source = request.args.get("source","")
 
     # VEHICLE LIST
 
@@ -1637,12 +1859,16 @@ def report(depot):
         row_date = str(row[0])
         row_indent = str(row[1])
         row_vehicle = str(row[2])
-        row_lf = str(row[3])
-        row_part = str(row[4])
-        row_item = str(row[5])
-        row_qty = str(row[6])
-        row_rate = str(row[7])
-        row_total = str(row[8])
+
+        row_technician = str(row[3])
+        row_source = str(row[4])
+
+        row_lf = str(row[5])
+        row_part = str(row[6])
+        row_item = str(row[7])
+        row_qty = str(row[8])
+        row_rate = str(row[9])
+        row_total = str(row[10])
 
         if from_date and row_date < from_date:
             continue
@@ -1663,6 +1889,8 @@ def report(depot):
                 and item_search not in row_item.lower()
             ):
                 continue
+        if source and source.lower() != row_source.lower():
+            continue
  
         filtered.append(row)
     page = int(request.args.get("page", 1))
@@ -1695,16 +1923,13 @@ def report(depot):
         <td>{row[2]}</td>
 
         <td>{row[3]}</td>
-
-        <td>{row[4]}</td>
-
-        <td>{row[5]}</td>
-
-        <td>{row[6]}</td>
-
-        <td>{row[7]}</td>
-
-        <td>{row[8]}</td>
+        <td>{row[4]}</td>  
+        <td>{row[5]}</td>  
+        <td>{row[6]}</td>  
+        <td>{row[7]}</td>  
+        <td>{row[8]}</td>  
+        <td>{row[9]}</td>  
+        <td>{row[10]}</td> 
 
         </tr>
         """
@@ -1734,7 +1959,7 @@ def report(depot):
         else:
 
             pagination += f"""
-            <a href="?page={p}&from_date={from_date}&to_date={to_date}&vehicle={vehicle}&item={item}"
+            <a href="?page={p}&from_date={from_date}&to_date={to_date}&vehicle={vehicle}&item={item}&source={source}"
             style="
             padding:8px 12px;
             background:#eee;
@@ -1750,7 +1975,7 @@ def report(depot):
 
         <tr>
 
-        <td colspan="9"
+        <td colspan="11"
         style="text-align:center;color:red;font-weight:bold;">
 
         No Record Found
@@ -1919,6 +2144,28 @@ def report(depot):
     {item_options}
 
     </datalist>
+    Source
+
+    <select name="source">
+
+    <option value="">All</option>
+
+    <option value="Central Store"
+    {"selected" if source=="Central Store" else ""}>
+    Central Store
+    </option>
+
+    <option value="Central Workshop"
+    {"selected" if source=="Central Workshop" else ""}>
+    Central Workshop
+    </option>
+
+    <option value="Local Purchase"
+    {"selected" if source=="Local Purchase" else ""}>
+    Local Purchase
+    </option>
+
+    </select>
 
     <button type="submit">
 
@@ -1943,6 +2190,8 @@ def report(depot):
     <th>Date</th>
     <th>Indent No</th>
     <th>Vehicle</th>
+    <th>Technician</th>
+    <th>Source</th>
     <th>LF No</th>
     <th>Part No</th>
     <th>Item Name</th>
@@ -2221,6 +2470,7 @@ def admin_report():
     to_date = request.args.get("to_date","")
     vehicle = request.args.get("vehicle","")
     item = request.args.get("item","")
+    source = request.args.get("source","")
 
     filtered = []
 
@@ -2236,6 +2486,8 @@ def admin_report():
             continue
 
         if vehicle and vehicle.lower() not in str(r[2]).lower():
+            continue
+        if source and str(r[8]).lower() != source.lower():
             continue
 
         if item:
@@ -2386,7 +2638,7 @@ def admin_report():
         else:
 
             pagination += f"""
-            <a href="?page={p}&depot={depot}&from_date={from_date}&to_date={to_date}&vehicle={vehicle}&item={item}"
+            <a href="?page={p}&depot={depot}&from_date={from_date}&to_date={to_date}&vehicle={vehicle}&item={item}&source={source}"
             style="
             padding:8px 12px;
             background:#eee;
@@ -2504,6 +2756,13 @@ th{{
     padding:6px;
     font-size:12px;
 }}
+
+th:nth-child(7),
+td:nth-child(7){{
+max-width:100px;
+overflow-wrap:break-word;
+white-space:normal;
+}}
 .summary{{
 background:#003d80;
 color:white;
@@ -2611,6 +2870,29 @@ placeholder="LF No / Part No / Item Name">
 {item_options}
 
 </datalist>
+
+Source
+
+<select name="source">
+
+<option value="">All</option>
+
+<option value="Central Store"
+{"selected" if source=="Central Store" else ""}>
+Central Store
+</option>
+
+<option value="Central Workshop"
+{"selected" if source=="Central Workshop" else ""}>
+Central Workshop
+</option>
+
+<option value="Local Purchase"
+{"selected" if source=="Local Purchase" else ""}>
+Local Purchase
+</option>
+
+</select>
 
 <button type="submit">
 
