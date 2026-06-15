@@ -771,8 +771,8 @@ required>
 <input
 type="number"
 name="qty[]"
-step="0.5"
-min="0.5"
+step="0.25"
+min="0.25"
 required
 onkeyup="calcRow(this)">
 </td>
@@ -1241,8 +1241,8 @@ row.innerHTML = `
 <td>
 <input type="number"
 name="qty[]"
-step="0.5"
-min="0.5"
+step="0.25"
+min="0.25"
 required
 onkeyup="calcRow(this)">
 </td>
@@ -1934,7 +1934,10 @@ def report(depot):
         </tr>
         """
 
-    total_pages = (total_records + per_page - 1) // per_page
+    total_pages = max(
+        1,
+        (total_records + per_page - 1) // per_page
+    )
 
     pagination = ""
 
@@ -2614,8 +2617,20 @@ def admin_report():
 
         """
 
-    total_pages = (total_records + per_page - 1) // per_page
-
+    total_pages = max(
+        1,
+        (total_records + per_page - 1) // per_page
+    )
+    pagination_info = f"""
+    <div style="
+    text-align:center;
+    margin-bottom:10px;
+    font-weight:bold;
+    font-size:16px;
+    ">
+    Page {page} of {total_pages}
+    </div>
+    """
     pagination = ""
 
     start_page = max(1, page - 5)
@@ -2648,7 +2663,28 @@ def admin_report():
             {p}
             </a>
             """
- 
+    if end_page < total_pages:
+
+        pagination += """
+        <span style="
+        padding:8px;
+        font-weight:bold;
+        ">
+        ...
+        </span>
+        """
+
+        pagination += f"""
+        <a href="?page={total_pages}&depot={depot}&from_date={from_date}&to_date={to_date}&vehicle={vehicle}&item={item}&source={source}"
+        style="
+        padding:8px 12px;
+        background:#eee;
+        margin:2px;
+        border-radius:5px;
+        text-decoration:none;">
+        {total_pages}
+        </a>
+        """
     if rows == "":
 
         rows = """
@@ -2943,6 +2979,8 @@ text-align:center;
 margin-top:20px;
 ">
 
+{pagination_info}
+
 {pagination}
 
 </div>
@@ -3026,6 +3064,7 @@ def supervisor_report():
     FROM indents i
     JOIN indent_items d
     ON i.id = d.indent_id
+    ORDER BY i.id DESC
     """)
 
     data = cur.fetchall()
@@ -3086,7 +3125,7 @@ def supervisor_report():
                 continue
 
             try:
-                qty = int(float(r[6] or 0))
+                qty = float(r[6] or 0)
             except:
                 qty = 0
 
