@@ -15,7 +15,7 @@ app.secret_key = "rsrtc2026"
 import os
 
 
-DATABASE_URL = os.environ.get("DATABASE_URL")
+DATABASE_URL = "postgresql://rsrtcuser:bpeSNFw8NkCJO1ZQpc5W9YKxsm5KB58N@dpg-d8hogkdckfvc73b0482g-a.oregon-postgres.render.com/rsrtc"
 pool = SimpleConnectionPool(
     1,    # minimum connections
     20,   # maximum connections
@@ -92,7 +92,7 @@ def home():
 <!DOCTYPE html>
 <html>
 <head>
-<title>RSRTC Indent System</title>
+<title>RSRTC Store Indent System (SIS)</title>
 <link rel="stylesheet" href="/static/style.css">
 </head>
 
@@ -100,9 +100,14 @@ def home():
 
 <div class="box">
 
-<h2>RSRTC INDENT SYSTEM</h2>
+<h2>
+RSRTC STORE INDENT SYSTEM (SIS)
+</h2>
 
-<p>By Hitesh Mishra</p>
+<p><span class="small-text">Developed & Designed</span>
+<br>
+by Hitesh Mishra
+</p>
 
 <a href="/login" class="login-link">
 Login Here
@@ -163,7 +168,7 @@ def login():
 
 <div class="box">
 
-<h2>LOGIN</h2>
+<h2>SIS LOGIN</h2>
 
 <p style="
 background:#ffe6e6;
@@ -771,8 +776,8 @@ required>
 <input
 type="number"
 name="qty[]"
-step="0.25"
-min="0.25"
+step="0.1"
+min="0.1"
 required
 onkeyup="calcRow(this)">
 </td>
@@ -1241,8 +1246,8 @@ row.innerHTML = `
 <td>
 <input type="number"
 name="qty[]"
-step="0.25"
-min="0.25"
+step="0.1"
+min="0.1"
 required
 onkeyup="calcRow(this)">
 </td>
@@ -3057,6 +3062,7 @@ def supervisor_report():
         i.date,
         i.depot,
         i.vehicle,
+        i.indent_no,
         d.lf_no,
         d.part_no,
         d.item_name,
@@ -3125,7 +3131,7 @@ def supervisor_report():
                 continue
 
             try:
-                qty = float(r[6] or 0)
+                qty = float(r[7] or 0)
             except:
                 qty = 0
 
@@ -3138,7 +3144,7 @@ def supervisor_report():
 
             <td>{r[1]}</td>
 
-            <td>{r[2]}</td>
+          
 
             <td>{r[3]}</td>
 
@@ -3146,6 +3152,7 @@ def supervisor_report():
 
             <td>{r[5]}</td>
 
+            <td>{r[6]}</td>
             <td>{qty}</td>
 
             </tr>
@@ -3220,19 +3227,19 @@ table{{
 width:100%;
 border-collapse:collapse;
 margin-top:20px;
+font-size:14px;
+}}
+
+th, td{{
+border:1px solid #ddd;
+padding:8px;
+text-align:left;
 }}
 
 th{{
 background:#003d80;
 color:white;
-padding:10px;
 }}
-
-td{{
-border:1px solid #ddd;
-padding:10px;
-}}
-
 .summary{{
 background:#003d80;
 color:white;
@@ -3343,7 +3350,7 @@ Print
 
 <th>Date</th>
 <th>Depot</th>
-<th>Vehicle</th>
+<th>Indent No</th>
 <th>LF No</th>
 <th>Part No</th>
 <th>Item Name</th>

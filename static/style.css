@@ -9,7 +9,7 @@ body {
 }
 
 .box {
-    width: 400px;
+    width: 500px;
     margin: 100px auto;
     background: yellow;
     padding: 40px;
@@ -21,9 +21,24 @@ body {
     color: #003d80;
 }
 
-.login-link {
-    text-decoration: none;
-    color: #003d80;
+
+.small-text{
+    font-size:14px;
+    colour:#666;
+    font-weight:normal;
+    letter-spacing:1px;
+}
+
+.author{
+    font-size:22px;
+    colour:#003d80;
+    font-weight:bold;
+    margin-bottom:25px;
+}
+
+.login-link:hover {
+    color: darkred;
+    text-decoration: underline;
 }
 
 .login-link:hover {
