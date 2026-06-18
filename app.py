@@ -15,7 +15,7 @@ app.secret_key = "rsrtc2026"
 import os
 
 
-DATABASE_URL = "postgresql://rsrtcuser:bpeSNFw8NkCJO1ZQpc5W9YKxsm5KB58N@dpg-d8hogkdckfvc73b0482g-a.oregon-postgres.render.com/rsrtc"
+DATABASE_URL = os.environ.get("DATABASE_URL")
 pool = SimpleConnectionPool(
     1,    # minimum connections
     20,   # maximum connections
@@ -3136,11 +3136,17 @@ def supervisor_report():
                 qty = 0
 
             total_qty += qty
-
+            try:
+                display_date = datetime.strptime(
+                    str(r[0]),
+                    "%Y-%m-%d"
+                ).strftime("%d-%m-%Y")
+            except:
+                display_date = r[0]
             rows += f"""
             <tr>
 
-            <td>{r[0]}</td>
+            <td>{display_date}</td>
 
             <td>{r[1]}</td>
 
