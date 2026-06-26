@@ -143,6 +143,7 @@ def login():
 
             return redirect("/supervisor_report")
 
+        
         if userid in DEPOTS and password == userid.lower():
 
             session["user"] = userid
@@ -491,6 +492,15 @@ input,select{{
     box-sizing:border-box;
 }}
 
+.sr-col,
+.srno{{
+    width:28px !important;
+    min-width:28px !important;
+    max-width:28px !important;
+    padding:2px !important;
+    text-align:center;
+}}
+
 input:focus,
 select:focus{{
     border:2px solid #005ecb;
@@ -512,52 +522,80 @@ table{{
     border-radius:10px;
 }}
 
-@media(max-width:768px){{
+@media (max-width:768px){{
 
 table{{
     display:block;
     overflow-x:auto;
     white-space:nowrap;
+    width:100%;
 }}
 
-table td:nth-child(1) select{{
-    min-width:120px;
+table th,
+table td{{
+    padding:4px 6px;
+    font-size:12px;
 }}
 
-table td:nth-child(2) input{{
-    min-width:140px;
+/* # Column */
+.sr-col,
+.srno{{
+    width:22px !important;
+    min-width:22px !important;
+    max-width:22px !important;
+    padding:2px !important;
+    text-align:center;
 }}
 
+/* Type */
+table td:nth-child(2) select{{
+    min-width:90px;
+}}
+
+/* LF No */
 table td:nth-child(3) input{{
-    min-width:100px;
-}}
-
-table td:nth-child(4) input{{
-    min-width:340px;
-}}
-
-table td:nth-child(5) select{{
-    min-width:140px;
-}}
-
-table td:nth-child(6) input{{
-    min-width:100px;
-}}
-
-table td:nth-child(7) input{{
-    min-width:100px;
-}}
-
-table td:nth-child(8) input{{
     min-width:120px;
 }}
 
-table td:nth-child(9) button{{
-    min-width:50px;
+/* Part No */
+table td:nth-child(4) input{{
+    min-width:90px;
+}}
+
+/* Item Name */
+table td:nth-child(5) input{{
+    min-width:260px;
+}}
+
+/* Source */
+table td:nth-child(6) select{{
+    min-width:120px;
+}}
+
+/* Qty */
+table td:nth-child(7) input{{
+    min-width:70px;
+}}
+
+/* Rate */
+table td:nth-child(8) input{{
+    min-width:75px;
+}}
+
+/* Total */
+table td:nth-child(9) input{{
+    min-width:85px;
+}}
+
+/* Delete */
+table td:nth-child(10) button{{
+    min-width:35px;
+    padding:3px 6px;
 }}
 
 }}
 
+}}
 table th{{
     background:#003d80;
     color:white;
@@ -720,26 +758,21 @@ required>
 <table id="itemTable">
 
 <tr>
+<th class="sr-col">#</th>
 <th style="width:10%">Type</th>
-<th style="width:15%">LF No</th>
-
-<th style="width:10%">Part No</th>
-
+<th style="width:13%">LF No</th>
+<th style="width:12%">Part No</th>
 <th style="width:30%">Item Name</th>
-
 <th style="width:10%">Source</th>
-
-<th style="width:7%">Qty</th>
-
-<th style="width:8%">Per Item Rate</th>
-
-<th style="width:8%">Total</th>
-
-<th style="width:2%">Action</th>
+<th style="width:8%">Qty</th>
+<th style="width:8%">Rate</th>
+<th style="width:11%">Total</th>
+<th style="width:2%">*</th>
 
 </tr>
 
 <tr>
+<td class="srno">1</td>
 <td>
 <select name="item_type[]" onchange="changeType(this)">
 
@@ -774,11 +807,10 @@ required>
 
 <td>
 <input
-type="number"
+type="text"
 name="qty[]"
-step="0.1"
-min="0.1"
 required
+autocomplete="off"
 onkeyup="calcRow(this)">
 </td>
 
@@ -787,8 +819,9 @@ onkeyup="calcRow(this)">
 type="number"
 name="rate[]"
 step="0.01"
+min="0"
 required
-onkeyup="calcRow(this)">
+oninput="calcRow(this)">
 </td>
 
 <td>
@@ -1127,6 +1160,7 @@ function changeType(el){{
 
         source.innerHTML = `
         <option>Central Workshop</option>
+        <option>Local Purchase</option>
         `;
 
         source.value = "Central Workshop";
@@ -1182,20 +1216,20 @@ function changeType(el){{
 
 function validateForm(){{
 
-    let totals =
-    document.getElementsByName("total[]");
+    let totals = document.getElementsByName("total[]");
+    let qtys = document.getElementsByName("qty[]");
 
     for(let i=0;i<totals.length;i++){{
 
+        if(qtys[i].value.trim().toUpperCase()=="NA"){{
+            continue;
+        }}
+
         if(
-            totals[i].value == "" ||
-            Number(totals[i].value) <= 0
+            totals[i].value=="" ||
+            Number(totals[i].value)<=0
         ){{
-
-            alert(
-            "Please fill item quantity again and Total."
-            );
-
+            alert("Please fill item quantity again and Total.");
             return false;
         }}
     }}
@@ -1211,7 +1245,7 @@ let row =
 table.insertRow();
 
 row.innerHTML = `
-
+<td class="srno"></td>
 <td>
 <select name="item_type[]" onchange="changeType(this)">
 
@@ -1244,11 +1278,11 @@ row.innerHTML = `
 </td>
 
 <td>
-<input type="number"
+<input
+type="text"
 name="qty[]"
-step="0.1"
-min="0.1"
 required
+autocomplete="off"
 onkeyup="calcRow(this)">
 </td>
 
@@ -1256,8 +1290,9 @@ onkeyup="calcRow(this)">
 <input type="number"
 name="rate[]"
 step="0.01"
+min="0"
 required
-onkeyup="calcRow(this)">
+oninput="calcRow(this)">
 </td>
 
 <td>
@@ -1276,38 +1311,77 @@ X
 </td>
 
 `;
+updateSerial();
 
 }}
-
+function updateSerial(){{
+    let rows = document.querySelectorAll("#itemTable tr");
+    for(let i=1;i<rows.length;i++){{
+        rows[i].querySelector(".srno").innerHTML = i;
+    }}
+}}
 function deleteRow(btn){{
 
-btn.parentNode.parentNode.remove();
+    btn.parentNode.parentNode.remove();
 
-calculateGrand();
+    updateSerial();
+
+    calculateGrand();
 
 }}
 
 function calcRow(el){{
 
-let row =
-el.parentNode.parentNode;
+    let row = el.parentNode.parentNode;
 
-let qty =
-row.cells[5]
-.querySelector("input").value || 0;
+    let qtyBox = row.cells[6].querySelector("input");
+    let rateBox = row.cells[7].querySelector("input");
+    let totalBox = row.cells[8].querySelector("input");
 
-let PerItemRate =
-row.cells[6]
-.querySelector("input").value || 0;
+    let qty = qtyBox.value.trim().toUpperCase();
 
-row.cells[7]
-.querySelector("input").value =
-(qty * PerItemRate).toFixed(2);
+    // Qty = NA
+    if(qty=="NA"){{
 
-calculateGrand();
+        rateBox.value="0.00";
+        totalBox.value="0.00";
+
+        rateBox.readOnly = true;
+
+        calculateGrand();
+        return;
+    }}
+
+    // Qty number hai
+    rateBox.readOnly = false;
+    if(rateBox.value=="0.00"){{
+    rateBox.value="";
+    }}
+
+    // Number check
+    let q = parseFloat(qty);
+
+    if(qty==""){{
+        totalBox.value="";
+        calculateGrand();
+        return;
+    }}
+
+    if(qty!="NA" && isNaN(q)){{
+        return;
+    }}
+
+    if(qty!="NA" && q<0.1){{
+        return;
+    }}
+
+    let r = parseFloat(rateBox.value)||0;
+
+    totalBox.value=(q*r).toFixed(2);
+
+    calculateGrand();
 
 }}
-
 function calculateGrand(){{
 
 let totals =
@@ -1365,6 +1439,7 @@ def preview_indent():
         rows += f"""
 
         <tr>
+        <td>{i+1}</td>
         <td>{item_type_list[i]}</td>
         <td>{lf_list[i]}</td>
         <td>{part_list[i]}</td>
@@ -1433,13 +1508,15 @@ table{{
 th{{
     background:#0d47a1;
     color:white;
-    padding:10px;
+    padding:8px;
+    font-size:14px;
 }}
 
 td{{
-    padding:10px;
+    padding:6px;
     border:1px solid #ddd;
     text-align:center;
+    font-size:14px;
 }}
 
 .totalbox{{
@@ -1515,14 +1592,15 @@ INDENT PREVIEW
 <table>
 
 <tr>
-<th>Type</th>
-<th>LF No</th>
-<th>Part No</th>
-<th>Item Name</th>
-<th>Source</th>
-<th>Qty</th>
-<th>Rate</th>
-<th>Total</th>
+<th class="sr-col">#</th>
+<th style="width:6%">Type</th>
+<th style="width:13%">LF No</th>
+<th style="width:12%">Part No</th>
+<th style="width:32%">Item Name</th>
+<th style="width:10%">Source</th>
+<th style="width:6%">Qty</th>
+<th style="width:8%">Rate</th>
+<th style="width:9%">Total</th>
 </tr>
 
 {rows}
@@ -1856,7 +1934,8 @@ def report(depot):
         item_options += f'''
         <option value="{display}">
         '''
-
+    indent_set = set()
+    overall_total = 0
     filtered = []
 
     for row in db_rows:
@@ -1896,7 +1975,18 @@ def report(depot):
                 continue
         if source and source.lower() != row_source.lower():
             continue
- 
+
+        import math
+
+        try:
+            amt = float(row[10] or 0)
+
+            if not math.isnan(amt):
+                overall_total += amt
+
+        except:
+            pass
+        indent_set.add(row[1])   # row[1] = indent_no
         filtered.append(row)
     page = int(request.args.get("page", 1))
 
@@ -2103,7 +2193,9 @@ def report(depot):
 
     <div class="summary">
 
-    Total Records : {len(filtered)}
+    Total Indents : {len(indent_set)}
+    <br>
+    Overall Total : ₹ {overall_total:,.2f}
 
     </div>
 
@@ -2279,7 +2371,7 @@ def indent_detail(depot, indent_no):
 
     grand_total = 0
 
-    for item in items:
+    for i, item in enumerate(items, start=1):
 
         try:
             grand_total += float(item[6] or 0)
@@ -2289,15 +2381,15 @@ def indent_detail(depot, indent_no):
         rows += f"""
 
         <tr>
-
-        <td>{item[0]}</td>
-        <td>{item[1]}</td>
-        <td>{item[2]}</td>
-        <td>{item[3]}</td>
-        <td>{item[4]}</td>
-        <td>{item[5]}</td>
-        <td>{item[6]}</td>
-
+            
+            <td>{i}</td>
+            <td>{item[0]}</td>
+            <td>{item[1]}</td>
+            <td>{item[2]}</td>
+            <td>{item[3]}</td>
+            <td>{item[4]}</td>
+            <td>{item[5]}</td>
+            <td>{item[6]}</td>
         </tr>
 
         """
@@ -2340,6 +2432,15 @@ def indent_detail(depot, indent_no):
     th{{
     background:#003d80;
     color:white;
+    }}
+    
+    th:first-child,
+    td:first-child{{
+        width:28px;
+        min-width:28px;
+        max-width:28px;
+        text-align:center;
+        font-weight:bold;
     }}
 
     .btn{{
@@ -2413,13 +2514,16 @@ def indent_detail(depot, indent_no):
 
     <tr>
 
-    <th>LF No</th>
-    <th>Part No</th>
-    <th>Item Name</th>
-    <th>Source</th>
-    <th>Qty</th>
-    <th>Rate</th>
-    <th>Total</th>
+
+ 
+        <th>#</th>
+        <th>LF No</th>
+        <th>Part No</th>
+        <th>Item Name</th>
+        <th>Source</th>
+        <th>Qty</th>
+        <th>Rate</th>
+        <th>Total</th>
 
     </tr>
 
@@ -2479,8 +2583,13 @@ def admin_report():
     vehicle = request.args.get("vehicle","")
     item = request.args.get("item","")
     source = request.args.get("source","")
+    rate_filter = request.args.get("rate_filter","")
+
+    import math
 
     filtered = []
+    overall_total = 0
+    indent_set = set()
 
     for r in data:
 
@@ -2506,6 +2615,27 @@ def admin_report():
 
             if item_search not in search_text:
                 continue
+        try:
+            item_rate = float(r[10] or 0)
+        except:
+            item_rate = 0
+
+        if rate_filter == "0":
+            if item_rate != 0:
+                continue
+
+        elif rate_filter:
+            if item_rate <= float(rate_filter):
+                continue
+
+        try:
+            amt = float(r[11] or 0)
+            if not math.isnan(amt):
+                overall_total += amt
+        except:
+            pass
+
+        indent_set.add(r[3])      # Indent Number
 
         filtered.append(r)
     page = int(request.args.get("page", 1))
@@ -2585,7 +2715,7 @@ def admin_report():
         {d}
         </option>
         '''
-
+   
     rows = ""
 
     for row in page_records:
@@ -2658,7 +2788,7 @@ def admin_report():
         else:
 
             pagination += f"""
-            <a href="?page={p}&depot={depot}&from_date={from_date}&to_date={to_date}&vehicle={vehicle}&item={item}&source={source}"
+            <a href="?page={p}&depot={depot}&from_date={from_date}&to_date={to_date}&vehicle={vehicle}&item={item}&source={source}&rate_filter={rate_filter}"
             style="
             padding:8px 12px;
             background:#eee;
@@ -2680,7 +2810,7 @@ def admin_report():
         """
 
         pagination += f"""
-        <a href="?page={total_pages}&depot={depot}&from_date={from_date}&to_date={to_date}&vehicle={vehicle}&item={item}&source={source}"
+        <a href="?page={total_pages}&depot={depot}&from_date={from_date}&to_date={to_date}&vehicle={vehicle}&item={item}&source={source}&rate_filter={rate_filter}"
         style="
         padding:8px 12px;
         background:#eee;
@@ -2859,8 +2989,11 @@ font-weight:bold;
 
 <div class="summary">
 
+Total Indents : {len(indent_set)}
+<br>
 Total Records : {len(filtered)}
-
+<br>
+Overall Total : ₹ {overall_total:,.2f}
 
 </div>
 
@@ -2934,7 +3067,49 @@ Local Purchase
 </option>
 
 </select>
+<select name="rate_filter">
 
+<option value=""
+{"selected" if rate_filter=="" else ""}>
+All Rate
+</option>
+
+<option value="0"
+{"selected" if rate_filter=="0" else ""}>
+Rate = 0.00
+</option>
+
+<option value="500"
+{"selected" if rate_filter=="500" else ""}>
+Rate > 500
+</option>
+
+<option value="1000"
+{"selected" if rate_filter=="1000" else ""}>
+Rate > 1000
+</option>
+
+<option value="2000"
+{"selected" if rate_filter=="2000" else ""}>
+Rate > 2000
+</option>
+
+<option value="3000"
+{"selected" if rate_filter=="3000" else ""}>
+Rate > 3000
+</option>
+
+<option value="4000"
+{"selected" if rate_filter=="4000" else ""}>
+Rate > 4000
+</option>
+
+<option value="5000"
+{"selected" if rate_filter=="5000" else ""}>
+Rate > 5000
+</option>
+
+</select>
 <button type="submit">
 
 Search
@@ -2945,18 +3120,12 @@ Search
 type="button"
 onclick="window.print()">
 
-Print
+🖨 Print Report
 
 </button>
 
 </form>
-<button
-type="button"
-onclick="window.print()">
 
-🖨 Print Report
-
-</button>
 <table>
 
 <tr>
@@ -3375,5 +3544,8 @@ Print
 </html>
 
 """
+
+
+
 if __name__ == "__main__":
     app.run()
