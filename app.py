@@ -64,6 +64,36 @@ CREATE TABLE IF NOT EXISTS indent_items (
     total TEXT
 );
 """)
+cur.execute("""
+CREATE TABLE IF NOT EXISTS supervisor_check (
+
+    id SERIAL PRIMARY KEY,
+
+    indent_id INTEGER,
+
+    vehicle TEXT,
+    indent_no TEXT,
+
+    lf_no TEXT,
+    part_no TEXT,
+    item_name TEXT,
+
+    status TEXT,
+
+    inspector_name TEXT NOT NULL,
+    inspector_designation TEXT NOT NULL,
+    inspector_place TEXT NOT NULL,
+
+    assistant_name TEXT,
+    assistant_designation TEXT,
+    assistant_place TEXT,
+
+    checked_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+
+);
+""")
+
+
 
 conn.commit()
 
@@ -3222,12 +3252,20 @@ def supervisor_report():
     from_date = request.args.get("from_date","")
     to_date = request.args.get("to_date","")
     days = request.args.get("days","")
+    if days == "7":
 
+        to_date = datetime.today().strftime("%Y-%m-%d")
+
+        from_date = (
+            datetime.today() - timedelta(days=7)
+        ).strftime("%Y-%m-%d")
+   
     conn = get_conn()
     cur = conn.cursor()
 
-    cur.execute("""
+    query = """
     SELECT
+        i.id,
         i.date,
         i.depot,
         i.vehicle,
@@ -3239,21 +3277,35 @@ def supervisor_report():
     FROM indents i
     JOIN indent_items d
     ON i.id = d.indent_id
-    ORDER BY i.id DESC
-    """)
+    WHERE 1=1
+    """
 
+    params = []
+    if vehicle:
+        query += " AND LOWER(i.vehicle)=LOWER(%s)"
+        params.append(vehicle)
+
+    if from_date:
+        query += " AND i.date >= %s"
+        params.append(from_date)
+
+    if to_date:
+        query += " AND i.date <= %s"
+        params.append(to_date)
+    
+    query += """
+    AND UPPER(TRIM(d.qty)) <> 'NA'
+    ORDER BY i.date DESC, i.indent_no DESC
+    """
+
+    cur.execute(query, params)
+ 
     data = cur.fetchall()
 
     cur.close()
     pool.putconn(conn)
+    
 
-    if days == "7":
-
-        to_date = datetime.today().strftime("%Y-%m-%d")
-
-        from_date = (
-            datetime.today() - timedelta(days=7)
-        ).strftime("%Y-%m-%d")
 
     vehicle_options = ""
 
@@ -3284,51 +3336,101 @@ def supervisor_report():
         '''
 
     rows = ""
-    total_qty = 0
+    
 
     if vehicle != "":
 
         for r in data:
 
-            if str(r[2]).lower() != vehicle.lower():
-                continue
-
-            if from_date and str(r[0]) < from_date:
-                continue
-
-            if to_date and str(r[0]) > to_date:
-                continue
-
-            try:
-                qty = float(r[7] or 0)
-            except:
-                qty = 0
-
-            total_qty += qty
+            qty = str(r[8] or "")
             try:
                 display_date = datetime.strptime(
-                    str(r[0]),
+                    str(r[1]),
                     "%Y-%m-%d"
                 ).strftime("%d-%m-%Y")
             except:
-                display_date = r[0]
+                display_date = str(r[1])
             rows += f"""
             <tr>
 
             <td>{display_date}</td>
 
-            <td>{r[1]}</td>
+            <td>{r[2]}</td>
 
           
-
-            <td>{r[3]}</td>
 
             <td>{r[4]}</td>
 
             <td>{r[5]}</td>
 
             <td>{r[6]}</td>
+
+            <td>{r[7]}</td>
             <td>{qty}</td>
+            <td>
+
+            <input
+            type="hidden"
+            name="indent_id[]"
+            value="{r[0]}">
+            <input
+            type="hidden"
+            name="depot"
+            value="{r[2]}">
+
+            <input
+            type="hidden"
+            name="date[]"
+            value="{display_date}">
+            <input
+            type="hidden"
+            name="qty[]"
+            value="{qty}">
+
+            <input
+            type="hidden"
+            name="indent_no[]"
+            value="{r[4]}">
+
+            <input
+            type="hidden"
+            name="lf_no[]"
+            value="{r[5]}">
+
+            <input
+            type="hidden"
+            name="part_no[]"
+            value="{r[6]}">
+
+            <input
+            type="hidden"
+            name="item_name[]"
+            value="{r[7]}">
+
+            <select
+            class="status-box"
+            name="status[]"
+            required>
+
+            <option value="">
+            Select
+            </option>
+
+            <option value="Checked & Found OK">
+            Checked & Found OK
+            </option>
+
+            <option value="Checked & Not Found">
+            Checked & Not Found
+            </option>
+
+            <option value="Internal Item Can't Be Checked">
+            Internal Item Can't Be Checked
+            </option>
+
+            </select>
+
+            </td>
 
             </tr>
             """
@@ -3336,7 +3438,7 @@ def supervisor_report():
 
         rows = """
         <tr>
-        <td colspan="7"
+        <td colspan="8"
         style="text-align:center;color:red;font-weight:bold;">
         No Record Found
         </td>
@@ -3431,13 +3533,92 @@ display:none;
 
 }}
 
+/* Supervisor Page */
+
+.report-box{{
+    width:95%;
+    max-width:1400px;
+    margin:20px auto;
+    background:white;
+    padding:25px;
+    border-radius:12px;
+    box-shadow:0 0 10px #ccc;
+}}
+
+.report-table{{
+    width:100%;
+    border-collapse:collapse;
+    margin-top:20px;
+}}
+
+
+.report-table tr:nth-child(even){{
+    background:#f7f7f7;
+}}
+
+.report-table tr:hover{{
+    background:#eef5ff;
+}}
+
+.detail-table input{{
+    padding:3px 6px !important;
+    margin:1px 0 !important;
+    height:24px;
+    font-size:13px;
+    box-sizing:border-box;
+}}
+
+.detail-table label{{
+    font-size:12px;
+    margin-bottom:2px;
+    display:block;
+    font-weight:bold;
+}}
+
+.detail-table td{{
+    padding:2px 6px !important;
+    vertical-align:top;
+}}
+
+
+.report-table{{
+    table-layout:auto;
+    width:100%;
+    font-size:12px;
+}}
+
+.report-table th,
+.report-table td{{
+    padding:1px 4px;
+    height:20px;
+}}
+
+.status-box{{
+    width:170px;
+    height:24px;
+    padding:2px 4px;
+    margin:0;
+    font-size:12px;
+}}
+
+@media(max-width:900px){{
+
+.detail-row{{
+    flex-direction:column;
+}}
+
+.detail-box{{
+    width:100%;
+}}
+
+}}
 </style>
 
 </head>
 
 <body>
 
-<div class="box">
+<div class="report-box">
 
 <a href="/logout"
 style="
@@ -3460,13 +3641,9 @@ margin-bottom:15px;
 
 Vehicle : {vehicle}
 
-<br><br>
-
-Total Quantity : {total_qty}
-
 </div>
 
-<form>
+<form method="get">
 
 <input
 type="text"
@@ -3503,23 +3680,30 @@ Last 7 Days
 
 </select>
 
-<button type="submit">
+<button
+type="button"
+onclick="this.form.submit()">
 
 Search
 
 </button>
 
-<button
-type="button"
-onclick="window.print()">
-
-Print
-
-</button>
 
 </form>
 
-<table>
+<form method="post" action="/save_supervisor_report">
+
+<input
+type="hidden"
+name="vehicle"
+value="{vehicle}">
+
+<input
+type="hidden"
+name="from_date"
+value="{from_date}">
+
+<table class="report-table">
 
 <tr>
 
@@ -3530,12 +3714,106 @@ Print
 <th>Part No</th>
 <th>Item Name</th>
 <th>Qty</th>
+<th>Status</th>
 
 </tr>
 
 {rows}
 
 </table>
+
+<hr>
+
+<table class="detail-table">
+
+<tr>
+
+<td style="border:none;width:33%;">
+
+<label>Inspector Name *</label>
+
+<input
+type="text"
+name="inspector_name"
+required>
+
+</td>
+
+<td style="border:none;width:33%;">
+
+<label>Designation *</label>
+
+<input
+type="text"
+name="inspector_designation"
+required>
+
+</td>
+
+<td style="border:none;width:34%;">
+
+<label>Place *</label>
+
+<input
+type="text"
+name="inspector_place"
+required>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td style="border:none;">
+
+<label>Assistant Name</label>
+
+<input
+type="text"
+name="assistant_name">
+
+</td>
+
+<td style="border:none;">
+
+<label>Designation</label>
+
+<input
+type="text"
+name="assistant_designation">
+
+</td>
+
+<td style="border:none;">
+
+<label>Place</label>
+
+<input
+type="text"
+name="assistant_place">
+
+</td>
+
+</tr>
+
+</table>
+
+<br>
+
+<div style="text-align:center;">
+
+<button
+type="submit"
+style="width:220px;height:45px;font-size:18px;">
+
+💾 Save & Print
+
+</button>
+
+</div>
+
+</form>
 
 </div>
 
@@ -3545,6 +3823,289 @@ Print
 
 """
 
+@app.route("/save_supervisor_report", methods=["POST"])
+def save_supervisor_report():
+     
+    from datetime import datetime
+
+    inspection_datetime = datetime.now().strftime("%d-%m-%Y %I:%M:%S %p")
+    vehicle = request.form.get("vehicle","")
+    depot = request.form.get("depot","")
+
+    inspector_name = request.form.get("inspector_name","")
+    inspector_designation = request.form.get("inspector_designation","")
+    inspector_place = request.form.get("inspector_place","")
+
+    assistant_name = request.form.get("assistant_name","")
+    assistant_designation = request.form.get("assistant_designation","")
+    assistant_place = request.form.get("assistant_place","")
+
+    indent_ids = request.form.getlist("indent_id[]")
+    date_list = request.form.getlist("date[]")
+    qty_list = request.form.getlist("qty[]")
+    indent_nos = request.form.getlist("indent_no[]")
+    lf_list = request.form.getlist("lf_no[]")
+    part_list = request.form.getlist("part_no[]")
+    item_list = request.form.getlist("item_name[]")
+    status_list = request.form.getlist("status[]")
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    rows = ""
+
+    for i in range(len(status_list)):
+
+        cur.execute("""
+        INSERT INTO supervisor_check(
+
+        indent_id,
+        vehicle,
+        indent_no,
+        lf_no,
+        part_no,
+        item_name,
+        status,
+
+        inspector_name,
+        inspector_designation,
+        inspector_place,
+
+        assistant_name,
+        assistant_designation,
+        assistant_place
+
+        )
+
+        VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+
+        """,(
+
+        indent_ids[i],
+        vehicle,
+        indent_nos[i],
+        lf_list[i],
+        part_list[i],
+        item_list[i],
+        status_list[i],
+
+        inspector_name,
+        inspector_designation,
+        inspector_place,
+
+        assistant_name,
+        assistant_designation,
+        assistant_place
+
+        ))
+
+        rows += f"""
+
+        <tr>
+
+        <td>{date_list[i]}</td>
+
+        <td>{indent_nos[i]}</td>
+
+        <td>{lf_list[i]}</td>
+
+        <td>{part_list[i]}</td>
+
+        <td>{item_list[i]}</td>
+
+        <td>{qty_list[i]}</td>
+
+        <td>{status_list[i]}</td>
+
+        </tr>
+
+        """
+
+    conn.commit()
+
+    cur.close()
+
+    pool.putconn(conn)
+
+    return f"""
+
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<title>Inspection Report</title>
+
+<style>
+
+body{{font-family:Arial;padding:25px;}}
+
+table{{width:100%;border-collapse:collapse;}}
+
+th,td{{border:1px solid black;padding:6px;}}
+
+th{{background:#dddddd;}}
+
+</style>
+
+<script>
+
+window.onload = function(){{
+
+    window.print();
+
+}};
+
+</script>
+
+</head>
+
+<body>
+
+<h2 align="center">
+
+RSRTC VEHICLE INSPECTION REPORT(SIS)
+
+</h2>
+
+<hr>
+
+<table style="width:100%;border:none;margin-bottom:15px;">
+
+<tr>
+
+<td style="border:none;width:33%;">
+<b>Vehicle No :</b> {vehicle}
+</td>
+
+<td style="border:none;text-align:center;width:34%;">
+<b>Inspection Date & Time :</b><br>
+{inspection_datetime}
+</td>
+
+<td style="border:none;text-align:right;width:33%;">
+<b>Depot :</b> {depot}
+</td>
+
+</tr>
+
+</table>
+
+<br><br>
+
+<b>Inspector :</b> {inspector_name}
+
+<br>
+
+<b>Designation :</b> {inspector_designation}
+
+<br>
+
+<b>Place :</b> {inspector_place}
+
+<br><br>
+
+<b>Assistant :</b> {assistant_name}
+
+<br>
+
+<b>Designation :</b> {assistant_designation}
+
+<br>
+
+<b>Place :</b> {assistant_place}
+
+<br><br>
+
+<table>
+
+<tr>
+
+<th>Date</th>
+<th>Indent</th>
+<th>LF No</th>
+<th>Part No</th>
+<th>Item Name</th>
+<th>Qty</th>
+<th>Status</th>
+
+</tr>
+
+{rows}
+
+</table>
+
+<br><br><br>
+
+<table style="border:none;">
+
+<tr>
+
+<td style="border:none;text-align:center;">
+
+_____________________
+
+<br>
+
+Inspector Signature
+
+</td>
+
+<td style="border:none;text-align:center;">
+
+_____________________
+
+<br>
+
+Assistant Signature
+
+</td>
+
+</tr>
+
+</table>
+<br><br>
+
+<div style="text-align:center;">
+
+<button
+onclick="window.print();"
+style="
+padding:10px 20px;
+background:green;
+color:white;
+border:none;
+border-radius:5px;
+cursor:pointer;
+margin-right:10px;
+">
+
+🖨 Print Again
+
+</button>
+
+<button
+onclick="window.location.href='/supervisor_report';"
+style="
+padding:10px 20px;
+background:#003d80;
+color:white;
+border:none;
+border-radius:5px;
+cursor:pointer;
+">
+
+⬅ Back to Supervisor
+
+</button>
+
+</div>
+</body>
+
+</html>
+
+"""
 
 
 if __name__ == "__main__":
