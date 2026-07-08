@@ -4271,7 +4271,13 @@ def supervisor_reports():
 
     for r in data:
         try:
-            inspection_datetime = r[1].strftime("%d-%m-%Y %I:%M %p")
+            from zoneinfo import ZoneInfo
+
+            inspection_datetime = (
+                r[1]
+                .astimezone(ZoneInfo("Asia/Kolkata"))
+                .strftime("%d-%m-%Y %I:%M %p")
+            )
         except:
             inspection_datetime = str(r[1])
 
@@ -4611,7 +4617,13 @@ def supervisor_report_view():
     assistant_designation = first[13]
     assistant_place = first[14]
 
-    inspection_datetime = first[15].strftime("%d-%m-%Y %I:%M %p")
+    from zoneinfo import ZoneInfo
+
+    inspection_datetime = (
+        first[15]
+        .astimezone(ZoneInfo("Asia/Kolkata"))
+        .strftime("%d-%m-%Y %I:%M %p")
+    )
 
     rows = ""
 
