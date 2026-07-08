@@ -95,6 +95,8 @@ CREATE TABLE IF NOT EXISTS supervisor_check (
 
 
 
+
+
 conn.commit()
 
 cur.close()
@@ -3015,6 +3017,18 @@ font-weight:bold;
 ">
 ⬇ Download Database
 </a>
+
+<a href="/supervisor_reports"
+style="
+background:#0d6efd;
+color:white;
+padding:10px 18px;
+text-decoration:none;
+border-radius:5px;
+margin-right:10px;
+">
+Supervisor Reports
+</a>
 <h2>RSRTC ADMIN REPORT</h2>
 
 <div class="summary">
@@ -3752,7 +3766,7 @@ required>
 
 <td style="border:none;width:34%;">
 
-<label>Place *</label>
+<label>Designation Place *</label>
 
 <input
 type="text"
@@ -3787,7 +3801,7 @@ name="assistant_designation">
 
 <td style="border:none;">
 
-<label>Place</label>
+<label>Designation Place</label>
 
 <input
 type="text"
@@ -3828,7 +3842,7 @@ def save_supervisor_report():
      
     from datetime import datetime
 
-    inspection_datetime = datetime.now().strftime("%d-%m-%Y %I:%M:%S %p")
+    inspection_datetime = datetime.now()
     vehicle = request.form.get("vehicle","")
     depot = request.form.get("depot","")
 
@@ -3873,11 +3887,12 @@ def save_supervisor_report():
 
         assistant_name,
         assistant_designation,
-        assistant_place
+        assistant_place,
+        checked_date
 
         )
 
-        VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
 
         """,(
 
@@ -3895,7 +3910,8 @@ def save_supervisor_report():
 
         assistant_name,
         assistant_designation,
-        assistant_place
+        assistant_place,
+        inspection_datetime
 
         ))
 
@@ -4106,7 +4122,724 @@ cursor:pointer;
 </html>
 
 """
+@app.route("/supervisor_reports")
+def supervisor_reports():
+
+    if session.get("role") != "admin":
+        return redirect("/login")
+
+    from_date = request.args.get("from_date","")
+    to_date = request.args.get("to_date","")
+    depot = request.args.get("depot","")
+    vehicle = request.args.get("vehicle","")
+    page = int(request.args.get("page", 1))
+    per_page = 50
+
+    conn = get_conn()
+    cur = conn.cursor()
+    # Total Inspection (Repeat सहित)
+    cur.execute("""
+    SELECT COUNT(*)
+    FROM (
+        SELECT vehicle, checked_date
+        FROM supervisor_check
+        GROUP BY vehicle, checked_date
+    ) t
+    """)
+    total_inspection = cur.fetchone()[0]
+
+    # Unique Inspected Vehicle (बिना Repeat)
+    cur.execute("""
+    SELECT COUNT(DISTINCT vehicle)
+    FROM supervisor_check
+    """)
+    total_inspected_vehicle = cur.fetchone()[0]
+
+    query = """
+    SELECT
+        MIN(s.id) AS report_id,
+        MIN(s.checked_date) AS inspection_date,
+
+        i.depot,
+
+        s.vehicle,
+
+        s.inspector_name,
+        s.inspector_designation,
+        s.inspector_place,
+
+        SUM(
+            CASE
+            WHEN s.status='Checked & Found OK'
+            THEN 1 ELSE 0
+            END
+        ) ok_count,
+
+        SUM(
+            CASE
+            WHEN s.status='Checked & Not Found'
+            THEN 1 ELSE 0
+            END
+        ) not_found_count,
+
+        SUM(
+            CASE
+            WHEN s.status='Internal Item Can not Be Checked'
+            THEN 1 ELSE 0
+            END
+        ) cant_check_count
+
+    FROM supervisor_check s
+
+    JOIN indents i
+    ON s.indent_id=i.id
+
+    WHERE 1=1
+    """
+
+    params=[]
+
+    if from_date:
+        query+=" AND DATE(s.checked_date)>= %s"
+        params.append(from_date)
+
+    if to_date:
+        query+=" AND DATE(s.checked_date)<= %s"
+        params.append(to_date)
+
+    if depot:
+        query+=" AND i.depot=%s"
+        params.append(depot)
+
+    if vehicle:
+        query+=" AND LOWER(s.vehicle)=LOWER(%s)"
+        params.append(vehicle)
+
+    query += """
+
+    GROUP BY
+
+    s.checked_date,
+    i.depot,
+    s.vehicle,
+    s.inspector_name,
+    s.inspector_designation,
+    s.inspector_place
+
+    ORDER BY
+    DATE(s.checked_date) DESC,
+    s.vehicle
+
+    """
+
+    cur.execute(query,params)
+
+    data=cur.fetchall()
+    total_records = len(data)
+
+    start = (page - 1) * per_page
+    end = start + per_page
+
+    data = data[start:end]
+
+    total_pages = (total_records + per_page - 1) // per_page
+
+    cur.close()
+    pool.putconn(conn)
+
+    depot_options=""
+
+    for d in DEPOTS:
+        depot_options += f"""
+        <option value="{d}"
+        {"selected" if depot==d else ""}>
+        {d}
+        </option>
+        """
+
+    vehicle_options=""
+
+    for v in sorted(vehicle_df["VEH_NO"].astype(str).unique()):
+        vehicle_options += f"""
+        <option value="{v}">
+        {v}
+        </option>
+        """
+    pagination = ""
+    rows=""
+
+    for r in data:
+
+        rows += f"""
+
+        <tr>
+
+        <td>{r[1]}</td>
+
+        <td>{r[2]}</td>
+
+        <td>
+
+        <a href="/supervisor_report_view?id={r[0]}"
+        style="text-decoration:none;font-weight:bold;color:#003d80;">
+
+        {r[3]}
+
+        </a>
+
+        </td>
+
+        <td>
+
+        {r[4]} , {r[5]} , {r[6]}
+
+        </td>
+
+        <td align="center">{r[7]}</td>
+
+        <td align="center">{r[8]}</td>
+
+        <td align="center">{r[9]}</td>
+
+        </tr>
+
+        """
+
+    if rows=="":
+
+        rows="""
+
+        <tr>
+
+        <td colspan="7"
+        style="text-align:center;color:red;font-weight:bold;">
+
+        No Record Found
+
+        </td>
+
+        </tr>
+
+        """
+   
+
+    if total_pages == 0:
+        total_pages = 1
+
+    pagination = '<div style="text-align:center;margin-top:20px;">'
+
+    if page > 1:
+        pagination += f'''
+        <a href="?page={page-1}&from_date={from_date}&to_date={to_date}&depot={depot}&vehicle={vehicle}">
+        ◀ Previous
+        </a>
+        '''
+
+    pagination += f"<b>Page {page} of {total_pages}</b>"
+
+    if page < total_pages:
+        pagination += f'''
+        <a href="?page={page+1}&from_date={from_date}&to_date={to_date}&depot={depot}&vehicle={vehicle}">
+        Next ▶
+        </a>
+        '''
+
+    pagination += "</div>"
+    return f"""
+
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<title>Supervisor Reports</title>
+
+<style>
+
+body{{
+font-family:Arial;
+background:#eef2f7;
+padding:20px;
+}}
+
+.box{{
+background:white;
+padding:20px;
+border-radius:10px;
+}}
+
+input,select{{
+padding:8px;
+margin:4px;
+}}
+
+button{{
+padding:8px 18px;
+background:#198754;
+color:white;
+border:none;
+border-radius:5px;
+cursor:pointer;
+}}
+
+table{{
+width:100%;
+border-collapse:collapse;
+margin-top:20px;
+font-size:12px;
+}}
+
+th,td{{
+border:1px solid #ddd;
+padding:4px 5px;
+}}
+
+th{{
+background:#003d80;
+color:white;
+font-size:15px;
+}}
+
+td{{
+font-size:14px;
+}}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="box">
+
+<a href="/admin_report">
+
+⬅ Back
+
+</a>
+
+<h2>
+
+Supervisor Reports
+
+</h2>
+
+<div style="
+background:#003d80;
+color:white;
+padding:15px;
+border-radius:10px;
+margin-bottom:20px;
+font-size:16px;
+font-weight:bold;
+">
+
+🚍 Total Inspection :
+<b>{total_inspection}</b>
+
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+
+🚍 Inspected Vehicle :
+<b>{total_inspected_vehicle}</b>
+
+</div>
+
+<form method="get">
+
+From
+
+<input
+type="date"
+name="from_date"
+value="{from_date}">
+
+To
+
+<input
+type="date"
+name="to_date"
+value="{to_date}">
+
+<select
+name="depot">
+
+<option value="">
+
+All Depot
+
+</option>
+
+{depot_options}
+
+</select>
+
+<input
+type="text"
+name="vehicle"
+list="vehiclelist"
+placeholder="Vehicle Number"
+value="{vehicle}">
+
+<datalist id="vehiclelist">
+
+{vehicle_options}
+
+</datalist>
+
+<button>
+
+Search
+
+</button>
+
+</form>
+
+<table>
+
+<tr>
+
+<th>Inspection Date</th>
+
+<th>Depot</th>
+
+<th>Vehicle</th>
+
+<th>Inspector Details</th>
+
+<th>Checked & Found OK</th>
+
+<th>Checked & Not Found</th>
+
+<th>Can't Check</th>
+
+</tr>
+
+{rows}
+
+</table>
+{pagination}
+</div>
+
+</body>
+
+</html>
+
+"""
+
+@app.route("/supervisor_report_view")
+def supervisor_report_view():
+
+    if session.get("role") != "admin":
+        return redirect("/login")
+
+    report_id = request.args.get("id")
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+
+    SELECT
+        s.vehicle,
+        i.depot,
+        s.indent_no,
+        s.lf_no,
+        s.part_no,
+        s.item_name,
+        d.qty,
+        s.status,
+
+        s.inspector_name,
+        s.inspector_designation,
+        s.inspector_place,
+
+        s.assistant_name,
+        s.assistant_designation,
+        s.assistant_place,
+
+        s.checked_date
+
+    FROM supervisor_check s
+
+    JOIN indents i
+    ON s.indent_id=i.id
+
+    JOIN indent_items d
+    ON d.indent_id=i.id
+    AND d.lf_no=s.lf_no
+
+    WHERE
+    s.checked_date=(
+        SELECT checked_date
+        FROM supervisor_check
+        WHERE id=%s
+    )
+
+    AND s.vehicle=(
+        SELECT vehicle
+        FROM supervisor_check
+        WHERE id=%s
+    )
+
+    ORDER BY s.id
+
+    """, (report_id, report_id))
+
+    data=cur.fetchall()
+    if not data:
+        cur.close()
+        pool.putconn(conn)
+        return "No Report Found"
+ 
+    first = data[0]
+
+    vehicle = first[0]
+    depot = first[1]
+
+    inspector_name = first[8]
+    inspector_designation = first[9] 
+    inspector_place = first[10]
+
+    assistant_name = first[11]
+    assistant_designation = first[12]
+    assistant_place = first[13]
+
+    inspection_datetime = first[14].strftime("%d-%m-%Y %I:%M %p")
+
+    rows = ""
+
+    for r in data:
+
+        rows += f"""
+        <tr>
+
+        <td>{r[2]}</td>
+
+        <td>{r[3]}</td>
+
+        <td>{r[4]}</td>
+
+        <td>{r[5]}</td>
+
+        <td>{r[6]}</td>
+
+        <td>{r[7]}</td>
+
+        </tr>
+        """
+
+    cur.close()
+    pool.putconn(conn)
+
+    return f"""
+
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<title>Supervisor Report</title>
+
+<style>
+
+body{{
+font-family:Arial;
+padding:25px;
+}}
+
+table{{
+width:100%;
+border-collapse:collapse;
+margin-top:15px;
+}}
+
+th,td{{
+border:1px solid black;
+padding:6px;
+}}
+
+th{{
+background:#dddddd;
+}}
+
+button{{
+padding:10px 18px;
+background:#003d80;
+color:white;
+border:none;
+border-radius:5px;
+cursor:pointer;
+margin-top:20px;
+}}
+
+@media print{{
+button{{
+display:none;
+}}
+}}
+
+</style>
+
+</head>
+
+<body>
+
+<div style="text-align:left;margin-bottom:20px;">
+<button
+onclick="window.location.href='/supervisor_reports';"
+style="
+padding:10px 20px;
+background:#003d80;
+color:white;
+border:none;
+border-radius:5px;
+cursor:pointer;
+">
+
+⬅ Back
+
+</button>
+
+<button
+onclick="window.print();"
+style="
+padding:10px 20px;
+background:green;
+color:white;
+border:none;
+border-radius:5px;
+cursor:pointer;
+margin-right:10px;
+">
+
+🖨 Print
+
+</button>
 
 
+
+</div>
+
+<h2 align="center">
+
+RSRTC VEHICLE INSPECTION REPORT (SIS)
+
+</h2>
+
+<hr>
+
+<b>Inspection Date :</b>
+{inspection_datetime}
+
+<br><br>
+
+<b>Depot :</b>
+{depot}
+
+<br>
+
+<b>Vehicle :</b>
+{vehicle}
+
+<br><br>
+
+<b>Inspector :</b>
+{inspector_name}
+
+&nbsp;&nbsp;,
+
+&nbsp;&nbsp;
+
+{inspector_designation}
+
+&nbsp;&nbsp;,
+
+&nbsp;&nbsp;
+
+{inspector_place}
+
+<br><br>
+
+<b>Assistant :</b>
+
+{assistant_name}
+
+&nbsp;&nbsp;,
+
+&nbsp;&nbsp;
+
+{assistant_designation}
+
+&nbsp;&nbsp;,
+
+&nbsp;&nbsp;
+
+{assistant_place}
+
+<br><br>
+
+<table>
+
+<tr>
+
+<th>Indent</th>
+
+<th>LF No</th>
+
+<th>Part No</th>
+
+<th>Item Name</th>
+
+<th>Qty</th>
+
+<th>Status</th>
+
+</tr>
+
+{rows}
+
+</table>
+
+<br><br>
+
+<table style="border:none;">
+
+<tr>
+
+<td style="border:none;text-align:center;">
+
+_____________________
+
+<br>
+
+Inspector Signature
+
+</td>
+
+<td style="border:none;text-align:center;">
+
+_____________________
+
+<br>
+
+Assistant Signature
+
+</td>
+
+</tr>
+
+</table>
+
+</body>
+
+</html>
+
+"""
+
+    
+
+    return "Report Page"
 if __name__ == "__main__":
     app.run()
