@@ -4184,7 +4184,7 @@ def supervisor_reports():
 
         SUM(
             CASE
-            WHEN s.status='Internal Item Can not Be Checked'
+            WHEN s.status='Internal Item Can''t Be Checked'
             THEN 1 ELSE 0
             END
         ) cant_check_count
@@ -4511,7 +4511,7 @@ Search
 
 <th>Checked & Not Found</th>
 
-<th>Can't Check</th>
+<th>internal item Can't be Checked</th>
 
 </tr>
 
