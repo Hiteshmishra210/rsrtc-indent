@@ -4543,6 +4543,7 @@ def supervisor_report_view():
     SELECT
         s.vehicle,
         i.depot,
+        i.date,
         s.indent_no,
         s.lf_no,
         s.part_no,
@@ -4597,24 +4598,32 @@ def supervisor_report_view():
     vehicle = first[0]
     depot = first[1]
 
-    inspector_name = first[8]
-    inspector_designation = first[9] 
-    inspector_place = first[10]
+    inspector_name = first[9]
+    inspector_designation = first[10] 
+    inspector_place = first[11]
 
-    assistant_name = first[11]
-    assistant_designation = first[12]
-    assistant_place = first[13]
+    assistant_name = first[12]
+    assistant_designation = first[13]
+    assistant_place = first[14]
 
-    inspection_datetime = first[14].strftime("%d-%m-%Y %I:%M %p")
+    inspection_datetime = first[15].strftime("%d-%m-%Y %I:%M %p")
 
     rows = ""
 
     for r in data:
 
+        try:
+            indent_date = datetime.strptime(
+                str(r[2]),
+                "%Y-%m-%d"
+            ).strftime("%d-%m-%Y")
+        except:
+            indent_date = str(r[2])
+
         rows += f"""
         <tr>
 
-        <td>{r[2]}</td>
+        <td>{indent_date}</td>
 
         <td>{r[3]}</td>
 
@@ -4625,6 +4634,8 @@ def supervisor_report_view():
         <td>{r[6]}</td>
 
         <td>{r[7]}</td>
+      
+        <td>{r[8]}</td>
 
         </tr>
         """
@@ -4784,6 +4795,8 @@ RSRTC VEHICLE INSPECTION REPORT (SIS)
 
 <tr>
 
+<th>Indent Date</th>
+
 <th>Indent</th>
 
 <th>LF No</th>
@@ -4840,6 +4853,6 @@ Assistant Signature
 
     
 
-    return "Report Page"
+    
 if __name__ == "__main__":
     app.run()
