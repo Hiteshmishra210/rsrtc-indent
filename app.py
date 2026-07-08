@@ -88,7 +88,7 @@ CREATE TABLE IF NOT EXISTS supervisor_check (
     assistant_designation TEXT,
     assistant_place TEXT,
 
-    checked_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    checked_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 
 );
 """)
@@ -3844,6 +3844,7 @@ def save_supervisor_report():
     from zoneinfo import ZoneInfo
 
     inspection_datetime = datetime.now(ZoneInfo("Asia/Kolkata"))
+    inspection_datetime_display = inspection_datetime.strftime("%d-%m-%Y %I:%M %p")
     vehicle = request.form.get("vehicle","")
     depot = request.form.get("depot","")
 
@@ -3998,7 +3999,7 @@ RSRTC VEHICLE INSPECTION REPORT(SIS)
 
 <td style="border:none;text-align:center;width:34%;">
 <b>Inspection Date & Time :</b><br>
-{inspection_datetime}
+{inspection_datetime_display}
 </td>
 
 <td style="border:none;text-align:right;width:33%;">
@@ -4159,7 +4160,7 @@ def supervisor_reports():
     query = """
     SELECT
         MIN(s.id) AS report_id,
-        MIN(s.checked_date) AS inspection_date,
+        s.checked_date AS inspection_date,
 
         i.depot,
 
@@ -4228,8 +4229,7 @@ def supervisor_reports():
     s.inspector_place
 
     ORDER BY
-    DATE(s.checked_date) DESC,
-    s.vehicle
+    s.checked_date DESC
 
     """
 
@@ -4270,12 +4270,16 @@ def supervisor_reports():
     rows=""
 
     for r in data:
+        try:
+            inspection_datetime = r[1].strftime("%d-%m-%Y %I:%M %p")
+        except:
+            inspection_datetime = str(r[1])
 
         rows += f"""
 
         <tr>
 
-        <td>{r[1]}</td>
+        <td>{inspection_datetime}</td>
 
         <td>{r[2]}</td>
 
