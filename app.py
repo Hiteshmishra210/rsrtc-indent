@@ -3841,8 +3841,9 @@ style="width:220px;height:45px;font-size:18px;">
 def save_supervisor_report():
      
     from datetime import datetime
+    from zoneinfo import ZoneInfo
 
-    inspection_datetime = datetime.now()
+    inspection_datetime = datetime.now(ZoneInfo("Asia/Kolkata"))
     vehicle = request.form.get("vehicle","")
     depot = request.form.get("depot","")
 
