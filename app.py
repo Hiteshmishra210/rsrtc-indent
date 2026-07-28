@@ -3256,6 +3256,8 @@ def download_database():
         filename,
         as_attachment=True
     )
+
+from html import escape
 @app.route("/supervisor_report")
 def supervisor_report():
     if session.get("role") != "supervisor":
@@ -3419,7 +3421,7 @@ def supervisor_report():
             <input
             type="hidden"
             name="item_name[]"
-            value="{r[7]}">
+            value="{escape(str(r[7]))}">
 
             <select
             class="status-box"
@@ -3755,7 +3757,7 @@ required>
 
 <td style="border:none;width:33%;">
 
-<label>Designation *</label>
+<label>Designation and Posting Depot *</label>
 
 <input
 type="text"
@@ -3766,7 +3768,7 @@ required>
 
 <td style="border:none;width:34%;">
 
-<label>Designation Place *</label>
+<label>Checking Point *</label>
 
 <input
 type="text"
@@ -3791,7 +3793,7 @@ name="assistant_name">
 
 <td style="border:none;">
 
-<label>Designation</label>
+<label>Designation and Posting Depot </label>
 
 <input
 type="text"
@@ -3799,15 +3801,7 @@ name="assistant_designation">
 
 </td>
 
-<td style="border:none;">
 
-<label>Designation Place</label>
-
-<input
-type="text"
-name="assistant_place">
-
-</td>
 
 </tr>
 
@@ -3846,7 +3840,12 @@ def save_supervisor_report():
     inspection_datetime = datetime.now(ZoneInfo("Asia/Kolkata"))
     inspection_datetime_display = inspection_datetime.strftime("%d-%m-%Y %I:%M %p")
     vehicle = request.form.get("vehicle","")
-    depot = request.form.get("depot","")
+    try:
+        depot = vehicle_df[
+            vehicle_df["VEH_NO"].astype(str).str.upper() == vehicle.upper()
+        ]["NAME"].iloc[0]
+    except:
+        depot = request.form.get("depot","")
 
     inspector_name = request.form.get("inspector_name","")
     inspector_designation = request.form.get("inspector_designation","")
@@ -4010,17 +4009,17 @@ RSRTC VEHICLE INSPECTION REPORT(SIS)
 
 </table>
 
-<br><br>
+<br>
 
 <b>Inspector :</b> {inspector_name}
 
 <br>
 
-<b>Designation :</b> {inspector_designation}
+<b>Designation and Posting Depot :</b> {inspector_designation}
 
 <br>
 
-<b>Place :</b> {inspector_place}
+<b>Checking Point :</b> {inspector_place}
 
 <br><br>
 
@@ -4028,13 +4027,11 @@ RSRTC VEHICLE INSPECTION REPORT(SIS)
 
 <br>
 
-<b>Designation :</b> {assistant_designation}
+<b>Designation and Posting Depot :</b> {assistant_designation}
 
 <br>
 
-<b>Place :</b> {assistant_place}
-
-<br><br>
+<br>
 
 <table>
 
@@ -4162,7 +4159,7 @@ def supervisor_reports():
         MIN(s.id) AS report_id,
         s.checked_date AS inspection_date,
 
-        i.depot,
+        
 
         s.vehicle,
 
@@ -4222,7 +4219,7 @@ def supervisor_reports():
     GROUP BY
 
     s.checked_date,
-    i.depot,
+    
     s.vehicle,
     s.inspector_name,
     s.inspector_designation,
@@ -4280,21 +4277,28 @@ def supervisor_reports():
             )
         except:
             inspection_datetime = str(r[1])
-
+        try:
+            display_depot = vehicle_df[
+                vehicle_df["VEH_NO"].astype(str).str.upper() == str(r[2]).upper()
+            ]["NAME"].iloc[0]
+        except:
+            display_depot = ""
         rows += f"""
 
         <tr>
 
         <td>{inspection_datetime}</td>
 
-        <td>{r[2]}</td>
+        
+
+        <td>{display_depot}</td>
 
         <td>
 
         <a href="/supervisor_report_view?id={r[0]}"
         style="text-decoration:none;font-weight:bold;color:#003d80;">
 
-        {r[3]}
+        {r[2]}
 
         </a>
 
@@ -4302,15 +4306,15 @@ def supervisor_reports():
 
         <td>
 
-        {r[4]} , {r[5]} , {r[6]}
+        {r[3]} , {r[4]} 
 
         </td>
+
+        <td align="center">{r[6]}</td>
 
         <td align="center">{r[7]}</td>
 
         <td align="center">{r[8]}</td>
-
-        <td align="center">{r[9]}</td>
 
         </tr>
 
@@ -4766,7 +4770,7 @@ RSRTC VEHICLE INSPECTION REPORT (SIS)
 <b>Depot :</b>
 {depot}
 
-<br>
+<br><br>
 
 <b>Vehicle :</b>
 {vehicle}
@@ -4774,15 +4778,10 @@ RSRTC VEHICLE INSPECTION REPORT (SIS)
 <br><br>
 
 <b>Inspector :</b>
-{inspector_name}
-
-&nbsp;&nbsp;,
-
-&nbsp;&nbsp;
-
+{inspector_name},
 {inspector_designation}
 
-&nbsp;&nbsp;,
+&nbsp;&nbsp; : <b>Check Point :</b> -
 
 &nbsp;&nbsp;
 
@@ -4792,19 +4791,9 @@ RSRTC VEHICLE INSPECTION REPORT (SIS)
 
 <b>Assistant :</b>
 
-{assistant_name}
-
-&nbsp;&nbsp;,
-
-&nbsp;&nbsp;
-
+{assistant_name},
 {assistant_designation}
 
-&nbsp;&nbsp;,
-
-&nbsp;&nbsp;
-
-{assistant_place}
 
 <br><br>
 
