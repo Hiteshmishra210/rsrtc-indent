@@ -15,7 +15,7 @@ app.secret_key = "rsrtc2026"
 import os
 
 
-DATABASE_URL = os.environ.get("DATABASE_URL")
+DATABASE_URL = "postgresql://rsrtcuser:bpeSNFw8NkCJO1ZQpc5W9YKxsm5KB58N@dpg-d8hogkdckfvc73b0482g-a.oregon-postgres.render.com/rsrtc"
 pool = SimpleConnectionPool(
     1,    # minimum connections
     20,   # maximum connections
@@ -2870,6 +2870,33 @@ def admin_report():
         """
 
     grand_total = len(filtered)
+    filter_header = ""
+
+    if depot:
+        filter_header += f"<b>Depot :</b> {depot}&nbsp;&nbsp;&nbsp;&nbsp;"
+
+    if from_date:
+        filter_header += f"<b>From :</b> {datetime.strptime(from_date,'%Y-%m-%d').strftime('%d.%m.%Y')}&nbsp;&nbsp;&nbsp;&nbsp;"
+
+    if to_date:
+        filter_header += f"<b>To :</b> {datetime.strptime(to_date,'%Y-%m-%d').strftime('%d.%m.%Y')}&nbsp;&nbsp;&nbsp;&nbsp;"
+
+    if vehicle:
+        filter_header += f"<b>Vehicle :</b> {vehicle}&nbsp;&nbsp;&nbsp;&nbsp;"
+
+    if item:
+        filter_header += f"<b>Item :</b> {item}&nbsp;&nbsp;&nbsp;&nbsp;"
+
+    if source:
+        filter_header += f"<b>Source :</b> {source}&nbsp;&nbsp;&nbsp;&nbsp;"
+
+    if rate_filter:
+        if rate_filter == "0":
+            rate_name = "Rate = 0"
+        else:
+            rate_name = f"Rate > {rate_filter}"
+
+        filter_header += f"<b>Rate :</b> {rate_name}"
 
     return f"""
 
@@ -2974,6 +3001,27 @@ border-radius:10px;
 margin-bottom:20px;
 }}
 
+.print-filter{{
+display:none;
+font-size:15px;
+font-weight:bold;
+text-align:center;
+margin:15px 0;
+line-height:28px;
+}}
+
+@media print{{
+
+.print-filter{{
+display:block;
+}}
+
+form,
+button{{
+display:none;
+}}
+
+}}
 @media print {{
 
 form,button{{
@@ -3029,7 +3077,25 @@ margin-right:10px;
 ">
 Supervisor Reports
 </a>
+
+<a href="/various_reports"
+style="
+background:red;
+color:white;
+padding:10px 18px;
+text-decoration:none;
+border-radius:5px;
+margin-right:10px;
+">
+Various Reports
+</a>
+
 <h2>RSRTC ADMIN REPORT</h2>
+<div class="print-filter">
+
+{filter_header}
+
+</div>
 
 <div class="summary">
 
@@ -4858,7 +4924,1378 @@ Assistant Signature
 """
 
     
+@app.route("/various_reports")
+def various_reports():
+
+    if session.get("role") != "admin":
+        return redirect("/login")
+
+    return """
+<!DOCTYPE html>
+<html>
+
+<head>
+
+<title>Various Reports</title>
+
+<style>
+
+body{
+    font-family:Arial;
+    background:#f4f6f9;
+    margin:0;
+    padding:30px;
+}
+
+.box{
+    width:900px;
+    margin:auto;
+    background:white;
+    padding:30px;
+    border-radius:10px;
+    box-shadow:0 0 10px #ccc;
+}
+
+h2{
+    text-align:center;
+    color:#003d80;
+    margin-bottom:30px;
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+}
+
+th{
+    background:#003d80;
+    color:white;
+    padding:12px;
+}
+
+td{
+    border:1px solid #ddd;
+    padding:12px;
+    text-align:center;
+}
+
+a.btn{
+    background:#28a745;
+    color:white;
+    padding:8px 18px;
+    text-decoration:none;
+    border-radius:5px;
+    font-weight:bold;
+}
+
+.back{
+    background:#dc3545;
+    color:white;
+    padding:10px 18px;
+    text-decoration:none;
+    border-radius:5px;
+    display:inline-block;
+    margin-bottom:20px;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="box">
+
+<a href="/admin_report" class="back">
+← Back
+</a>
+
+<h2>VARIOUS REPORTS</h2>
+
+<table>
+
+<tr>
+<th>S.No</th>
+<th>Report Name</th>
+<th>Action</th>
+</tr>
+
+<tr>
+<td>1</td>
+<td>Last Posting Date</td>
+<td><a class="btn" href="/last_posting_report">View</a></td>
+</tr>
+
+<tr>
+<td>2</td>
+<td>NA Item Report</td>
+<td><a class="btn" href="/na_item_report">View</a></td>
+</tr>
+
+<tr>
+<td>3</td>
+<td>Depot Wise Local Purchase</td>
+<td><a class="btn" href="/local_purchase_report">View</a></td>
+</tr>
+
+<tr>
+<td>4</td>
+<td>Depot Wise Consumption</td>
+<td><a class="btn" href="/consumption_report">View</a></td>
+</tr>
+
+</table>
+
+</div>
+
+</body>
+</html>
+"""
+
+from datetime import datetime
+
+today = datetime.now().strftime("%d.%m.%Y")
+@app.route("/last_posting_report")
+def last_posting_report():
+
+    if session.get("role") != "admin":
+        return redirect("/login")
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+    SELECT
+        i.depot,
+        TO_CHAR(
+            CASE
+                WHEN i.date LIKE '____-__-__'
+                    THEN i.date::date
+                ELSE
+                    TO_DATE(i.date,'DD.MM.YYYY')
+            END,
+            'DD.MM.YYYY'
+        ) AS last_posting_date
+
+    FROM indents i
+
+    INNER JOIN
+    (
+        SELECT
+            depot,
+            MAX(id) AS last_id
+        FROM indents
+        GROUP BY depot
+    ) x
+    ON i.id = x.last_id
+
+    ORDER BY i.depot
+    """)
+
+    data = cur.fetchall()
+
+    cur.close()
+    pool.putconn(conn)
+
+    rows = ""
+
+    for i, row in enumerate(data, start=1):
+
+        rows += f"""
+        <tr>
+            <td>{i}</td>
+            <td>{row[0]}</td>
+            <td>{row[1]}</td>
+        </tr>
+        """
+
+    return f"""
+<!DOCTYPE html>
+<html>
+
+<head>
+
+<title>Last Posting Date Report</title>
+
+<style>
+
+body{{
+font-family:Arial;
+background:#f4f6f9;
+padding:25px;
+}}
+
+.box{{
+width:800px;
+margin:auto;
+background:white;
+padding:25px;
+border-radius:10px;
+box-shadow:0 0 10px #ccc;
+}}
+
+table{{
+width:100%;
+border-collapse:collapse;
+margin-top:20px;
+}}
+
+th{{
+background:#003d80;
+color:white;
+padding:10px;
+}}
+
+td{{
+border:1px solid #ddd;
+padding:8px;
+text-align:center;
+}}
+
+.btn{{
+padding:10px 18px;
+color:white;
+text-decoration:none;
+border-radius:5px;
+font-weight:bold;
+margin-right:10px;
+}}
+
+.back{{
+background:red;
+}}
+
+.print{{
+background:green;
+}}
+
+@media print{{
+.back,
+.print{{
+display:none;
+}}
+}}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="box">
+
+<a href="/various_reports" class="btn back">
+← Back
+</a>
+
+<button
+class="btn print"
+onclick="window.print()">
+Print
+</button>
+
+<h2 style="text-align:center;color:#003d80;">
+LAST POSTING DATE REPORT ON {today}
+</h2>
+
+<table>
+
+<tr>
+<th>S.No</th>
+<th>Depot</th>
+<th>Last Posting Date</th>
+</tr>
+
+{rows}
+
+</table>
+
+</div>
+
+</body>
+
+</html>
+"""
+
+@app.route("/na_item_report")
+def na_item_report():
+
+    if session.get("role") != "admin":
+        return redirect("/login")
+
+    from_date = request.args.get("from_date","")
+    to_date = request.args.get("to_date","")
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    sql = """
+    SELECT
+        d.lf_no,
+        d.part_no,
+        d.item_name,
+        COUNT(*) AS na_count
+    FROM indents i
+    JOIN indent_items d
+        ON i.id = d.indent_id
+    WHERE
+        UPPER(TRIM(d.qty))='NA'
+    """
+
+    params = []
+
+    if from_date:
+        sql += " AND i.date >= %s"
+        params.append(from_date)
+
+    if to_date:
+        sql += " AND i.date <= %s"
+        params.append(to_date)
+
+    sql += """
+    GROUP BY
+        d.lf_no,
+        d.part_no,
+        d.item_name
+    ORDER BY
+    CASE
+        WHEN d.lf_no='LP' THEN 2
+        WHEN d.lf_no='RC' THEN 3
+        WHEN d.lf_no='OIL' THEN 4
+        ELSE 1
+    END,
+    na_count DESC,
+    d.item_name
+    """
+
+    cur.execute(sql, params)
+
+    data = cur.fetchall()
+
+    cur.close()
+    pool.putconn(conn)
+
+    rows = ""
+
+    for i,row in enumerate(data,1):
+
+        rows += f"""
+        <tr>
+            <td>{i}</td>
+            <td>{row[0]}</td>
+            <td>{row[1]}</td>
+            <td style="text-align:left;">{row[2]}</td>
+            <td>
+            <a href="/na_item_detail?lf={row[0]}&part={row[1]}&from_date={from_date}&to_date={to_date}">
+            {row[3]}
+            </a>
+            </td>
+        </tr>
+        """
+    from datetime import datetime
+
+    header = "NA ITEM REPORT"
+
+    if from_date and to_date:
+        fd = datetime.strptime(from_date,"%Y-%m-%d").strftime("%d.%m.%Y")
+        td = datetime.strptime(to_date,"%Y-%m-%d").strftime("%d.%m.%Y")
+        header += f"<br>FROM {fd} TO {td}"
+
+    elif from_date:
+        fd = datetime.strptime(from_date,"%Y-%m-%d").strftime("%d.%m.%Y")
+        header += f"<br>FROM {fd}"
+
+    elif to_date:
+        td = datetime.strptime(to_date,"%Y-%m-%d").strftime("%d.%m.%Y")
+        header += f"<br>UP TO {td}"
+    return f"""
+
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<title>NA Item Report</title>
+
+<style>
+
+body{{
+font-family:Arial;
+background:#eef2f7;
+padding:20px;
+}}
+
+.box{{
+width:95%;
+margin:auto;
+background:white;
+padding:25px;
+border-radius:12px;
+box-shadow:0 0 10px #ccc;
+}}
+
+table{{
+width:100%;
+border-collapse:collapse;
+margin-top:20px;
+}}
+
+th{{
+background:#003d80;
+color:white;
+padding:10px;
+}}
+
+td{{
+border:1px solid #ddd;
+padding:8px;
+text-align:center;
+}}
+
+input{{
+padding:8px;
+}}
+
+button{{
+padding:9px 18px;
+background:green;
+color:white;
+border:none;
+border-radius:5px;
+cursor:pointer;
+}}
+
+.back{{
+background:red;
+color:white;
+padding:10px 18px;
+text-decoration:none;
+border-radius:5px;
+margin-right:10px;
+}}
+
+@media print{{
+form,.back,.print{{
+display:none;
+}}
+}}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="box">
+
+<a href="/various_reports" class="back">
+← Back
+</a>
+
+<button
+class="print"
+onclick="window.print()">
+Print
+</button>
+
+<h2 style="
+text-align:center;
+color:#003d80;
+line-height:1.6;
+">
+{header}
+</h2>
+
+<form method="get">
+
+From Date
+
+<input
+type="date"
+name="from_date"
+value="{from_date}">
+
+To Date
+
+<input
+type="date"
+name="to_date"
+value="{to_date}">
+
+<button type="submit">
+
+Show Report
+
+</button>
+
+</form>
+
+<table>
+
+<tr>
+
+<th>S.No</th>
+
+<th>LF No</th>
+
+<th>Part No</th>
+
+<th>Item Name</th>
+
+<th>NA Count</th>
+
+</tr>
+
+{rows}
+
+</table>
+
+</div>
+
+</body>
+
+</html>
+
+"""
+
+@app.route("/na_item_detail")
+def na_item_detail():
+
+    if session.get("role") != "admin":
+        return redirect("/login")
+
+    lf = request.args.get("lf","")
+    part = request.args.get("part","")
+    from_date = request.args.get("from_date","")
+    to_date = request.args.get("to_date","")
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    sql = """
+    SELECT
+        i.depot,
+        COUNT(*) AS na_count
+    FROM indents i
+    JOIN indent_items d
+        ON i.id = d.indent_id
+    WHERE
+        UPPER(TRIM(d.qty))='NA'
+        AND d.lf_no=%s
+        AND d.part_no=%s
+    """
+
+    params = [lf, part]
+
+    if from_date:
+        sql += " AND i.date >= %s"
+        params.append(from_date)
+
+    if to_date:
+        sql += " AND i.date <= %s"
+        params.append(to_date)
+
+    sql += """
+    GROUP BY i.depot
+    ORDER BY na_count DESC, i.depot
+    """
+
+    cur.execute(sql, params)
+
+    data = cur.fetchall()
+
+    cur.close()
+    pool.putconn(conn)
+
+    rows=""
+
+    total=0
+
+    for i,row in enumerate(data,1):
+
+        total += row[1]
+
+        rows += f"""
+        <tr>
+            <td>{i}</td>
+            <td>{row[0]}</td>
+            <td>{row[1]}</td>
+        </tr>
+        """
+
+    return f"""
+
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<title>NA Item Detail</title>
+
+<style>
+
+body{{
+font-family:Arial;
+background:#eef2f7;
+padding:20px;
+}}
+
+.box{{
+width:800px;
+margin:auto;
+background:white;
+padding:25px;
+border-radius:10px;
+box-shadow:0 0 10px #ccc;
+}}
+
+table{{
+width:100%;
+border-collapse:collapse;
+margin-top:20px;
+}}
+
+th{{
+background:#003d80;
+color:white;
+padding:10px;
+}}
+
+td{{
+border:1px solid #ddd;
+padding:8px;
+text-align:center;
+}}
+
+.btn{{
+padding:10px 18px;
+color:white;
+text-decoration:none;
+border-radius:5px;
+font-weight:bold;
+margin-right:10px;
+}}
+
+.back{{
+background:red;
+}}
+
+.print{{
+background:green;
+}}
+
+@media print{{
+.back,.print{{
+display:none;
+}}
+}}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="box">
+
+<a href="/na_item_report?from_date={from_date}&to_date={to_date}" class="btn back">
+← Back
+</a>
+
+<button
+class="btn print"
+onclick="window.print()">
+Print
+</button>
+
+<h2 style="text-align:center;color:#003d80;">
+NA ITEM DEPOT DETAILS
+</h2>
+
+<h3 style="text-align:center;">
+LF No : {lf}
+<br>
+Part No : {part}
+</h3>
+
+<table>
+
+<tr>
+<th>S.No</th>
+<th>Depot</th>
+<th>NA Count</th>
+</tr>
+
+{rows}
+
+<tr style="font-weight:bold;background:#ffffcc;">
+<td colspan="2">TOTAL</td>
+<td>{total}</td>
+</tr>
+
+</table>
+
+</div>
+
+</body>
+
+</html>
+
+"""
+
+@app.route("/local_purchase_report")
+def local_purchase_report():
+
+    if session.get("role") != "admin":
+        return redirect("/login")
+
+    from_date = request.args.get("from_date","")
+    to_date = request.args.get("to_date","")
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    sql = """
+    SELECT
+        i.depot,
+
+        ROUND(
+            COALESCE(
+                SUM(
+                    CASE
+                        WHEN d.source='Local Purchase'
+                        THEN COALESCE(NULLIF(d.total,''),'0')::numeric
+                        ELSE 0
+                    END
+                ),
+            0),2) AS amount
+
+    FROM indents i
+    JOIN indent_items d
+        ON i.id=d.indent_id
+
+    WHERE 1=1
+    """
+
+    params=[]
+
+    if from_date:
+        sql += " AND i.date >= %s"
+        params.append(from_date)
+
+    if to_date:
+        sql += " AND i.date <= %s"
+        params.append(to_date)
+
+    sql += """
+
+    GROUP BY i.depot
+
+    ORDER BY amount DESC,i.depot
+
+    """
+
+    cur.execute(sql,params)
+
+    data=cur.fetchall()
+    report = {}
+
+    for depot, amount in data:
+        report[depot] = {
+            "posted": True,
+            "amount": float(amount or 0)
+        }
+
+    posted_rows = []
+    not_posted_rows = []
+
+    grand_total = 0
+
+    for depot in DEPOTS:
+
+        if depot in report:
+
+            amt = report[depot]["amount"]
+            grand_total += amt
+            posted_rows.append((depot, amt))
+
+        else:
+
+            not_posted_rows.append(depot)
+
+    posted_rows.sort(key=lambda x: x[1], reverse=True)
+
+    rows = ""
+    sr = 1
+
+    for depot, amt in posted_rows:
+
+        rows += f"""
+        <tr>
+            <td>{sr}</td>
+            <td>{depot}</td>
+            <td>₹ {amt:,.2f}</td>
+        </tr>
+        """
+
+        sr += 1
+
+    for depot in sorted(not_posted_rows):
+
+        rows += f"""
+        <tr>
+            <td>{sr}</td>
+            <td>{depot}</td>
+            <td style="color:red;font-weight:bold;">
+                Posting Not Done
+            </td>
+        </tr>
+        """
+
+        sr += 1
+
+    cur.close()
+    pool.putconn(conn)
 
     
+
+
+    from datetime import datetime
+
+    header="DEPOT WISE LOCAL PURCHASE REPORT"
+
+    if from_date and to_date:
+
+        fd=datetime.strptime(from_date,"%Y-%m-%d").strftime("%d.%m.%Y")
+
+        td=datetime.strptime(to_date,"%Y-%m-%d").strftime("%d.%m.%Y")
+
+        header+=f"<br>FROM {fd} TO {td}"
+
+    elif from_date:
+
+        fd=datetime.strptime(from_date,"%Y-%m-%d").strftime("%d.%m.%Y")
+
+        header+=f"<br>FROM {fd}"
+
+    elif to_date:
+
+        td=datetime.strptime(to_date,"%Y-%m-%d").strftime("%d.%m.%Y")
+
+        header+=f"<br>UP TO {td}"
+
+    return f"""
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<title>Depot Wise Local Purchase</title>
+
+<style>
+
+body{{
+font-family:Arial;
+background:#eef2f7;
+padding:20px;
+}}
+
+.box{{
+width:95%;
+margin:auto;
+background:white;
+padding:25px;
+border-radius:12px;
+box-shadow:0 0 10px #ccc;
+}}
+
+table{{
+width:100%;
+border-collapse:collapse;
+margin-top:20px;
+}}
+
+th{{
+background:#003d80;
+color:white;
+padding:10px;
+}}
+
+td{{
+border:1px solid #ddd;
+padding:8px;
+text-align:center;
+}}
+
+input{{
+padding:8px;
+}}
+
+button{{
+padding:9px 18px;
+background:green;
+color:white;
+border:none;
+border-radius:5px;
+cursor:pointer;
+}}
+
+.back{{
+background:red;
+color:white;
+padding:10px 18px;
+text-decoration:none;
+border-radius:5px;
+margin-right:10px;
+}}
+
+a{{
+text-decoration:none;
+font-weight:bold;
+}}
+
+@media print{{
+form,.back,.print{{
+display:none;
+}}
+}}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="box">
+
+<a href="/various_reports" class="back">
+← Back
+</a>
+
+<button
+class="print"
+onclick="window.print()">
+Print
+</button>
+
+<h2 style="
+text-align:center;
+color:#003d80;
+line-height:1.6;
+">
+{header}
+</h2>
+
+<form method="get">
+
+From Date
+
+<input
+type="date"
+name="from_date"
+value="{from_date}">
+
+To Date
+
+<input
+type="date"
+name="to_date"
+value="{to_date}">
+
+<button type="submit">
+Show Report
+</button>
+
+</form>
+
+<table>
+
+<tr>
+
+<th>S.No</th>
+
+<th>Depot</th>
+
+<th>Local Purchase Amount (₹)</th>
+
+</tr>
+
+{rows}
+
+<tr style="font-weight:bold;background:#ffffcc;">
+
+<td colspan="2">
+
+TOTAL
+
+</td>
+
+<td>
+
+₹ {grand_total:,.2f}
+
+</td>
+
+</tr>
+
+</table>
+
+</div>
+
+</body>
+
+</html>
+
+"""
+
+
+@app.route("/consumption_report")
+def consumption_report():
+
+    if session.get("role") != "admin":
+        return redirect("/login")
+
+    month = request.args.get("month","")
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    sql = """
+    SELECT
+
+        i.depot,
+
+        ROUND(
+            COALESCE(
+                SUM(
+                    CASE
+                        WHEN d.source='Local Purchase'
+                        THEN COALESCE(NULLIF(d.total,''),'0')::numeric
+                        ELSE 0
+                    END
+                ),0
+            ),2
+        ) lp,
+
+        ROUND(
+            COALESCE(
+                SUM(
+                    CASE
+                        WHEN d.source='Central Store'
+                         AND UPPER(TRIM(d.lf_no))<>'OIL'
+                         AND UPPER(TRIM(d.lf_no))<>'RC'
+                        THEN COALESCE(NULLIF(d.total,''),'0')::numeric
+                        ELSE 0
+                    END
+                ),0
+            ),2
+        ) central,
+
+        ROUND(
+            COALESCE(
+                SUM(
+                    CASE
+                        WHEN UPPER(TRIM(d.lf_no))='RC'
+                        THEN COALESCE(NULLIF(d.total,''),'0')::numeric
+                        ELSE 0
+                    END
+                ),0
+            ),2
+        ) rc,
+
+        ROUND(
+            COALESCE(
+                SUM(
+                    CASE
+                        WHEN UPPER(TRIM(d.lf_no))='OIL'
+                        THEN COALESCE(NULLIF(d.total,''),'0')::numeric
+                        ELSE 0
+                    END
+                ),0
+            ),2
+        ) oil
+
+    FROM indents i
+
+    JOIN indent_items d
+        ON i.id=d.indent_id
+
+    WHERE 1=1
+    """
+
+    params=[]
+
+    if month:
+
+        sql += """
+        AND TO_CHAR(
+            CASE
+                WHEN i.date LIKE '__.__.____'
+                THEN TO_DATE(i.date,'DD.MM.YYYY')
+                ELSE i.date::date
+            END,
+            'YYYY-MM'
+        )=%s
+        """
+
+        params.append(month)
+
+    sql += """
+
+    GROUP BY i.depot
+
+    ORDER BY i.depot
+
+    """
+
+    cur.execute(sql,params)
+
+    data=cur.fetchall()
+
+    report={}
+
+    for row in data:
+
+        depot=row[0]
+
+        lp=float(row[1] or 0)
+        central=float(row[2] or 0)
+        rc=float(row[3] or 0)
+        oil=float(row[4] or 0)
+
+        total=lp+central+rc+oil
+
+        report[depot]={
+            "lp":lp,
+            "central":central,
+            "rc":rc,
+            "oil":oil,
+            "total":total
+        }
+
+    rows=""
+
+    sr=1
+
+    g_lp=0
+    g_central=0
+    g_rc=0
+    g_oil=0
+    g_total=0
+
+    for depot in DEPOTS:
+
+        if depot in report:
+
+            r=report[depot]
+
+            g_lp+=r["lp"]
+            g_central+=r["central"]
+            g_rc+=r["rc"]
+            g_oil+=r["oil"]
+            g_total+=r["total"]
+
+            rows+=f"""
+            <tr>
+                <td>{sr}</td>
+                <td>{depot}</td>
+                <td>₹ {r['lp']:,.2f}</td>
+                <td>₹ {r['central']:,.2f}</td>
+                <td>₹ {r['rc']:,.2f}</td>
+                <td>₹ {r['oil']:,.2f}</td>
+                <td><b>₹ {r['total']:,.2f}</b></td>
+            </tr>
+            """
+
+        else:
+
+            rows+=f"""
+            <tr>
+                <td>{sr}</td>
+                <td>{depot}</td>
+                <td colspan="5" style="color:red;font-weight:bold;">
+                Posting Not Done
+                </td>
+            </tr>
+            """
+
+        sr+=1
+
+    cur.close()
+    pool.putconn(conn)
+
+    from datetime import datetime
+
+    header="DEPOT WISE CONSUMPTION REPORT"
+
+    if month:
+
+        dt=datetime.strptime(month+"-01","%Y-%m-%d")
+
+        header+="<br>"+dt.strftime("%B %Y")
+
+    return f"""
+
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<title>Depot Wise Consumption Report</title>
+
+<style>
+
+body{{
+font-family:Arial;
+background:#eef2f7;
+padding:20px;
+}}
+
+.box{{
+width:98%;
+margin:auto;
+background:white;
+padding:20px;
+border-radius:10px;
+box-shadow:0 0 10px #ccc;
+}}
+
+table{{
+width:100%;
+border-collapse:collapse;
+margin-top:20px;
+}}
+
+th{{
+background:#003d80;
+color:white;
+padding:8px;
+}}
+
+td{{
+border:1px solid #ccc;
+padding:8px;
+text-align:center;
+}}
+
+.back{{
+background:red;
+color:white;
+padding:10px 18px;
+text-decoration:none;
+border-radius:5px;
+margin-right:10px;
+}}
+
+button{{
+padding:10px 18px;
+background:green;
+color:white;
+border:none;
+border-radius:5px;
+cursor:pointer;
+}}
+
+input{{
+padding:8px;
+}}
+
+@media print{{
+form,.back,.print{{
+display:none;
+}}
+}}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="box">
+
+<a href="/various_reports" class="back">
+← Back
+</a>
+
+<button class="print" onclick="window.print()">
+Print
+</button>
+
+<h2 style="text-align:center;color:#003d80;line-height:1.5;">
+{header}
+</h2>
+
+<form method="get">
+
+Month
+
+<input
+type="month"
+name="month"
+value="{month}">
+
+<button type="submit">
+
+Show Report
+
+</button>
+
+</form>
+
+<table>
+
+<tr>
+
+<th>S.No</th>
+
+<th>Depot</th>
+
+<th>Local Purchase</th>
+
+<th>Central Store</th>
+
+<th>RC Assembly</th>
+
+<th>Oil & Lubricants</th>
+
+<th>Total Consumption</th>
+
+</tr>
+
+{rows}
+
+<tr style="background:#ffff99;font-weight:bold;">
+
+<td colspan="2">
+GRAND TOTAL
+</td>
+
+<td>₹ {g_lp:,.2f}</td>
+
+<td>₹ {g_central:,.2f}</td>
+
+<td>₹ {g_rc:,.2f}</td>
+
+<td>₹ {g_oil:,.2f}</td>
+
+<td><b>₹ {g_total:,.2f}</b></td>
+
+</tr>
+
+</table>
+
+</div>
+
+</body>
+
+</html>
+
+"""
+    
 if __name__ == "__main__":
-    app.run()
+    app.run(host="0.0.0.0", port=5000, debug=True)
