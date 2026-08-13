@@ -775,6 +775,7 @@ autocomplete="off"
 placeholder="Indent Number"
 inputmode="numeric"
 maxlength="7"
+minlength="7"
 required
 oninput="this.setCustomValidity('');this.value=this.value.replace
 (/[^0-9]/g,'').slice(0,7);
