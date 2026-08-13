@@ -775,11 +775,10 @@ autocomplete="off"
 placeholder="Indent Number"
 inputmode="numeric"
 maxlength="7"
-minlength="7"
 required
 oninput="this.setCustomValidity('');this.value=this.value.replace
 (/[^0-9]/g,'').slice(0,7);
-this.setCustomValidity(this.vlaue.length===7?'':'Indent Number must be exactly 7 digits')">
+this.setCustomValidity(this.value.length===7?'':'Indent Number must be exactly 7 digits')">
 
 
 <label>Technician Name</label>
