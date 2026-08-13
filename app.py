@@ -774,7 +774,6 @@ name="indent_no"
 autocomplete="off"
 placeholder="Indent Number"
 inputmode="numeric"
-pattern="[0-9]{7}"
 maxlength="7"
 required
 oninput="this.setCustomValidity('');this.value=this.value.replace
