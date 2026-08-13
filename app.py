@@ -15,7 +15,7 @@ app.secret_key = "rsrtc2026"
 import os
 
 
-DATABASE_URL = "postgresql://rsrtcuser:bpeSNFw8NkCJO1ZQpc5W9YKxsm5KB58N@dpg-d8hogkdckfvc73b0482g-a.oregon-postgres.render.com/rsrtc"
+DATABASE_URL = os.environ.get("DATABASE_URL")
 pool = SimpleConnectionPool(
     1,    # minimum connections
     20,   # maximum connections
@@ -6304,4 +6304,4 @@ GRAND TOTAL
 """
     
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run()
