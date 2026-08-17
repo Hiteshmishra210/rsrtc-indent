@@ -3285,7 +3285,6 @@ margin-top:20px;
 from flask import send_file
 import pandas as pd
 from datetime import datetime
-
 @app.route("/download_database")
 def download_database():
 
@@ -3314,21 +3313,53 @@ def download_database():
     ORDER BY i.id DESC
     """
 
+    from openpyxl import Workbook
+    import tempfile
+    import os
+
+    filename = f"RSRTC_DATABASE_{datetime.now().strftime('%d-%m-%Y_%H-%M-%S')}.xlsx"
+    filepath = os.path.join(tempfile.gettempdir(), filename)
+
     try:
-        df = pd.read_sql(query, conn)
+        wb = Workbook(write_only=True)
+        ws = wb.create_sheet("Database")
+
+        ws.append([
+            "Depot",
+            "Date",
+            "Vehicle",
+            "Indent No",
+            "Technician",
+            "LF No",
+            "Part No",
+            "Item Name",
+            "Source",
+            "Qty",
+            "Rate",
+            "Total"
+        ])
+
+        cur = conn.cursor(name="database_download_cursor")
+        cur.itersize = 1000
+
+        cur.execute(query)
+
+        for row in cur:
+            ws.append(list(row))
+
+        cur.close()
+
+        wb.save(filepath)
 
     finally:
         pool.putconn(conn)
 
-    filename = f"RSRTC_DATABASE_{datetime.now().strftime('%d-%m-%Y_%H-%M-%S')}.xlsx"
-
-    df.to_excel(filename, index=False)
-
     return send_file(
-        filename,
-        as_attachment=True
+        filepath,
+        as_attachment=True,
+        download_name=filename
     )
-
+    
 from html import escape
 @app.route("/supervisor_report")
 def supervisor_report():
