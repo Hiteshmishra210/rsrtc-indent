@@ -3281,10 +3281,12 @@ margin-top:20px;
 </html>
 
 """
-
-from flask import send_file
-import pandas as pd
+from flask import send_file, redirect
 from datetime import datetime
+import tempfile
+import os
+
+
 @app.route("/download_database")
 def download_database():
 
@@ -3293,63 +3295,109 @@ def download_database():
 
     conn = get_conn()
 
-    query = """
-    SELECT
-        i.depot,
-        i.date,
-        i.vehicle,
-        i.indent_no,
-        i.technician,
-        d.lf_no,
-        d.part_no,
-        d.item_name,
-        d.source,
-        d.qty,
-        d.rate,
-        d.total
-    FROM indents i
-    JOIN indent_items d
-    ON i.id = d.indent_id
-    ORDER BY i.id DESC
-    """
-
-    from openpyxl import Workbook
-    import tempfile
-    import os
-
-    filename = f"RSRTC_DATABASE_{datetime.now().strftime('%d-%m-%Y_%H-%M-%S')}.xlsx"
+    filename = f"RSRTC_DATABASE_{datetime.now().strftime('%d-%m-%Y_%H-%M-%S')}.sql"
     filepath = os.path.join(tempfile.gettempdir(), filename)
 
     try:
-        wb = Workbook(write_only=True)
-        ws = wb.create_sheet("Database")
+        cur = conn.cursor()
 
-        ws.append([
-            "Depot",
-            "Date",
-            "Vehicle",
-            "Indent No",
-            "Technician",
-            "LF No",
-            "Part No",
-            "Item Name",
-            "Source",
-            "Qty",
-            "Rate",
-            "Total"
-        ])
+        with open(filepath, "w", encoding="utf-8") as f:
 
-        cur = conn.cursor(name="database_download_cursor")
-        cur.itersize = 1000
+            f.write("-- RSRTC DATABASE BACKUP\n")
+            f.write(f"-- Created: {datetime.now()}\n\n")
 
-        cur.execute(query)
+            # =========================
+            # INDENTS TABLE
+            # =========================
 
-        for row in cur:
-            ws.append(list(row))
+            f.write("-- =========================\n")
+            f.write("-- INDENTS DATA\n")
+            f.write("-- =========================\n\n")
+
+            cur.execute("""
+                SELECT
+                    id,
+                    depot,
+                    date,
+                    vehicle,
+                    indent_no,
+                    technician
+                FROM indents
+                ORDER BY id
+            """)
+
+            rows = cur.fetchall()
+
+            for row in rows:
+
+                values = []
+
+                for value in row:
+
+                    if value is None:
+                        values.append("NULL")
+                    else:
+                        safe_value = str(value).replace("'", "''")
+                        values.append(f"'{safe_value}'")
+
+                f.write(
+                    "INSERT INTO indents "
+                    "(id, depot, date, vehicle, indent_no, technician) "
+                    "VALUES "
+                    f"({', '.join(values)});\n"
+                )
+
+            f.write("\n\n")
+
+            # =========================
+            # INDENT ITEMS TABLE
+            # =========================
+
+            f.write("-- =========================\n")
+            f.write("-- INDENT ITEMS DATA\n")
+            f.write("-- =========================\n\n")
+
+            cur.execute("""
+                SELECT
+                    id,
+                    indent_id,
+                    lf_no,
+                    part_no,
+                    item_name,
+                    source,
+                    qty,
+                    rate,
+                    total
+                FROM indent_items
+                ORDER BY id
+            """)
+
+            rows = cur.fetchall()
+
+            for row in rows:
+
+                values = []
+
+                for value in row:
+
+                    if value is None:
+                        values.append("NULL")
+                    else:
+                        safe_value = str(value).replace("'", "''")
+                        values.append(f"'{safe_value}'")
+
+                f.write(
+                    "INSERT INTO indent_items "
+                    "(id, indent_id, lf_no, part_no, item_name, "
+                    "source, qty, rate, total) "
+                    "VALUES "
+                    f"({', '.join(values)});\n"
+                )
+
+            f.write("\n")
+            f.write("-- END OF BACKUP\n")
 
         cur.close()
-
-        wb.save(filepath)
 
     finally:
         pool.putconn(conn)
@@ -3357,8 +3405,10 @@ def download_database():
     return send_file(
         filepath,
         as_attachment=True,
-        download_name=filename
+        download_name=filename,
+        mimetype="application/sql"
     )
+ 
     
 from html import escape
 @app.route("/supervisor_report")
